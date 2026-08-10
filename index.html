@@ -547,7 +547,14 @@
 </style>
 </head>
 <body>
-
+<script>
+  const pw = prompt("Enter password:");
+  if (pw !== "Portia") {
+    document.body.innerHTML = "<h1 style='color:white;text-align:center;margin-top:40vh;'>Access denied</h1>";
+    document.body.style.background = "#10141a";
+    throw new Error("stopped");
+  }
+</script>
 <h1>Wyndham Executive Center — All Active Groups</h1>
 <div class="subtitle">Wyndham Executive Center — Columbia MO · EquipmentShare · Missouri Taxidermy Association · Union Local 518 · MSSD — Aug 9-18, 2026</div>
 
