@@ -611,7 +611,14 @@
 </style>
 </head>
 <body>
-
+<script>
+  const pw = prompt("Enter password:");
+  if (pw !== "Porta") {
+    document.body.innerHTML = "<h1 style='color:white;text-align:center;margin-top:40vh;'>Access denied</h1>";
+    document.body.style.background = "#10141a";
+    throw new Error("stopped");
+  }
+</script>
 <h1>Wyndham Executive Center — All Active Groups</h1>
 <div class="subtitle">Wyndham Executive Center — Columbia MO · Union Local 518 · MSSD · Tiered Support Summit · Show Me Rotary · Child Welfare System Partnership · Missouri Institute on Meaningful Aging · Compass Health · Missouri ACC · Missouri FBLA — Aug 17-31, 2026</div>
 
