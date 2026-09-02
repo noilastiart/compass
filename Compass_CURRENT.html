@@ -717,6 +717,53 @@
     flex-shrink: 0;
   }
 
+  /* --- Run sheet (printable day view): an on-screen preview modal whose
+     .run-sheet-room/.run-sheet-event styling is shared with the printed
+     page (see @media print below), so the preview is what actually prints. --- */
+  .run-sheet-modal {
+    display: none;
+    position: fixed; inset: 0; z-index: 600;
+    background: #00000090;
+    align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .run-sheet-modal.open { display: flex; }
+  .run-sheet-modal-panel {
+    background: #fff; color: #141a21;
+    width: min(1200px, 96vw); max-height: 92vh;
+    border-radius: 6px; overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 12px 40px #00000080;
+  }
+  .run-sheet-modal-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px; background: var(--surface); border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .run-sheet-modal-title { font-size: 14px; font-weight: 700; color: var(--gold-bright); }
+  .run-sheet-modal-actions { display: flex; gap: 8px; }
+  .run-sheet-modal-actions button {
+    background: var(--surface-raised); color: var(--gold-bright); border: 1px solid var(--gold);
+    padding: 7px 16px; border-radius: 16px; font-size: 12px; cursor: pointer;
+  }
+  .run-sheet-modal-actions .run-sheet-close-btn { color: var(--text); border-color: var(--line); }
+  .run-sheet-modal-scroll { overflow: auto; padding: 20px 24px; }
+  .run-sheet-container h2 { font-size: 15px; margin: 0 0 8px; color: #141a21; }
+  .run-sheet-body { column-count: 2; column-gap: 22px; }
+  .run-sheet-room { break-inside: avoid; margin-bottom: 8px; }
+  .run-sheet-room-name { font-weight: 700; font-size: 11px; color: #141a21; border-bottom: 1px solid #a8b8c5; margin-bottom: 3px; padding-bottom: 2px; }
+  .run-sheet-event { border: 1px solid #a8b8c5; border-left-width: 4px; border-radius: 3px; padding: 4px 7px; margin-bottom: 4px; break-inside: avoid; font-size: 10px; line-height: 1.35; color: #141a21; }
+  .run-sheet-event.rs-green { border-left-color: #2f6650; background: #eef6f1; }
+  .run-sheet-event.rs-blue { border-left-color: #3a6b8a; background: #eaf1f6; }
+  .run-sheet-event.rs-rev { border-left-color: #b8323a; background: #fdecee; }
+  .run-sheet-event-head { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 10.5px; }
+  .run-sheet-time { font-weight: 400; color: #555; }
+  .run-sheet-set-chip { display: inline-block; border: 1px solid #a8b8c5; border-radius: 8px; padding: 0 5px; font-size: 9px; color: #444; margin-left: 5px; font-weight: 400; }
+  .run-sheet-rev-tag { color: #8b1a1a; font-weight: 700; margin-right: 4px; }
+  .run-sheet-notes { margin-top: 2px; font-weight: 400; }
+  .run-sheet-notes-label { color: #666; font-weight: 700; margin-right: 3px; }
+  .run-sheet-av-none { color: #888; font-style: italic; }
+
   /* --- Print: one landscape page --- */
   @media print {
     @page { size: landscape; margin: 0.35in; }
@@ -758,6 +805,30 @@
     .conflicts-panel.is-clear h2 { color: #2f6650; }
     .group-legend { color: #444; }
     .hour-label { color: #666; }
+
+    /* --- Run sheet (printable day view): the modal is a screen-only preview
+       shell. On any print, hide it by default; only when print-runsheet mode
+       is active, show it with its chrome stripped so the page content flows
+       normally instead of being clipped by the modal's fixed size/scrolling. --- */
+    .run-sheet-modal { display: none !important; }
+    body.print-runsheet .run-sheet-modal {
+      display: block !important;
+      position: static !important;
+      background: none !important;
+      padding: 0 !important;
+    }
+    body.print-runsheet .run-sheet-modal-panel {
+      width: auto !important; max-height: none !important;
+      box-shadow: none !important; border-radius: 0 !important;
+      overflow: visible !important;
+    }
+    body.print-runsheet .run-sheet-modal-toolbar { display: none !important; }
+    body.print-runsheet .run-sheet-modal-scroll { overflow: visible !important; padding: 0 !important; }
+    body.print-runsheet .timeline-container,
+    body.print-runsheet .snapshot,
+    body.print-runsheet .group-legend,
+    body.print-runsheet .conflicts-panel,
+    body.print-runsheet .flags-panel { display: none !important; }
   }
 </style>
 </head>
@@ -768,6 +839,10 @@
 
 <div style="margin-bottom: 16px;" class="no-print-hide">
   <button onclick="window.print()" style="background:var(--surface-raised); color:var(--gold-bright); border:1px solid var(--gold); padding:8px 18px; border-radius:20px; font-size:12px; cursor:pointer;">🖨 Print this view (one landscape page)</button>
+  <button id="printRunSheetBtn" style="background:var(--surface-raised); color:var(--gold-bright); border:1px solid var(--gold); padding:8px 18px; border-radius:20px; font-size:12px; cursor:pointer; margin-left:10px;">🖨 Print run sheet (day view)</button>
+  <select id="runSheetGroupFilter" style="margin-left:10px; background:var(--surface-raised); color:var(--text); border:1px solid var(--line); border-radius:14px; padding:7px 10px; font-size:12px;">
+    <option value="">All groups (default)</option>
+  </select>
 </div>
 
 <div class="day-tabs no-print-hide" id="dayTabs"></div>
@@ -813,6 +888,21 @@
   </div>
   <div class="warning-note">⚠ Red hatch = flip window sales booked is shorter than what this setup realistically needs. Faded blocks have already happened, based on the current time.</div>
   <div class="unassigned-note no-print-hide" id="unassignedNote"></div>
+</div>
+
+<div class="run-sheet-modal" id="runSheetModal">
+  <div class="run-sheet-modal-panel">
+    <div class="run-sheet-modal-toolbar">
+      <div class="run-sheet-modal-title">Run Sheet Preview</div>
+      <div class="run-sheet-modal-actions">
+        <button id="runSheetPrintBtn">🖨 Print</button>
+        <button class="run-sheet-close-btn" id="runSheetCloseBtn">✕ Close</button>
+      </div>
+    </div>
+    <div class="run-sheet-modal-scroll">
+      <div class="run-sheet-container" id="runSheetContainer"></div>
+    </div>
+  </div>
 </div>
 
 <div class="flags-panel no-print-hide" id="flagsPanel" style="display:none;">
@@ -1040,7 +1130,7 @@ function renderDayTabs() {
     const hasConflict = conflictsForDate(day.date).length > 0;
     tab.className = 'day-tab' + (i === activeDayIndex ? ' active' : '') + (isToday ? ' is-today' : '');
     tab.innerHTML = (isToday ? '<span class="today-dot"></span>' : '') + day.dateLabel + (hasConflict ? '<span class="conflict-dot" title="Scheduling conflict"></span>' : '');
-    tab.addEventListener('click', () => { activeDayIndex = i; renderDayTabs(); renderRooms(); update(); });
+    tab.addEventListener('click', () => { activeDayIndex = i; renderDayTabs(); renderRooms(); populateRunSheetGroupFilter(); update(); });
     dayTabsEl.appendChild(tab);
   });
 }
@@ -1436,6 +1526,94 @@ function applyLayerFilter() {
   });
 }
 
+// --- Run sheet (printable day view) ---
+// A second, simplified print mode: one row per room, one block per event
+// (not per banquet/AV/live phase like the main timeline), built fresh into
+// #runSheetContainer right before printing and left empty otherwise.
+function runSheetSetupClass(ev) {
+  if (ev.status === 'revision') return 'rs-rev';
+  return ev.banquetStart != null ? 'rs-green' : 'rs-blue';
+}
+
+function runSheetSortKey(ev) {
+  if (ev.banquetStart != null) return ev.banquetStart;
+  if (ev.avStart != null) return ev.avStart;
+  return ev.liveStart != null ? ev.liveStart : 0;
+}
+
+function runSheetTimeRange(ev) {
+  const start = ev.banquetStart != null ? ev.banquetStart : (ev.avStart != null ? ev.avStart : ev.liveStart);
+  const end = ev.liveEnd != null ? ev.liveEnd : (ev.avEnd != null ? ev.avEnd : ev.banquetEnd);
+  return (start != null && end != null) ? `${fmtTime(start)} – ${fmtTime(end)}` : '';
+}
+
+function populateRunSheetGroupFilter() {
+  const sel = document.getElementById('runSheetGroupFilter');
+  const prev = sel.value;
+  const day = activeDay();
+  const groupsToday = [...new Set(day.rooms.flatMap(r => r.events.map(ev => ev.group)).filter(Boolean))];
+  sel.innerHTML = '<option value="">All groups (default)</option>' +
+    groupsToday.map(g => `<option value="${g}">${g}</option>`).join('');
+  if (groupsToday.includes(prev)) sel.value = prev;
+}
+
+function renderRunSheet(groupFilter) {
+  const day = activeDay();
+  const rooms = day.rooms
+    .map(room => ({ name: room.name, events: room.events.filter(ev => !groupFilter || ev.group === groupFilter) }))
+    .filter(room => room.events.length);
+
+  const roomsHtml = rooms.map(room => {
+    const events = room.events.slice().sort((a, b) => runSheetSortKey(a) - runSheetSortKey(b));
+    const eventsHtml = events.map(ev => {
+      const revTag = ev.status === 'revision' ? '<span class="run-sheet-rev-tag">REVISED</span>' : '';
+      const setChip = ev.gtd ? `<span class="run-sheet-set-chip">Set ${ev.gtd}</span>` : '';
+      const setupHtml = ev.setupNotes
+        ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">Setup:</span>${ev.setupNotes}</div>` : '';
+      const avHtml = ev.avNotes
+        ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">AV:</span>${ev.avNotes}</div>`
+        : `<div class="run-sheet-notes run-sheet-av-none"><span class="run-sheet-notes-label">AV:</span>No AV</div>`;
+      return `<div class="run-sheet-event ${runSheetSetupClass(ev)}">
+        <div class="run-sheet-event-head">
+          <span>${revTag}${ev.label}${ev.group ? ` — ${ev.group}` : ''}${setChip}</span>
+          <span class="run-sheet-time">${runSheetTimeRange(ev)}</span>
+        </div>
+        ${setupHtml}${avHtml}
+      </div>`;
+    }).join('');
+    return `<div class="run-sheet-room"><div class="run-sheet-room-name">${room.name}</div>${eventsHtml}</div>`;
+  }).join('');
+
+  document.getElementById('runSheetContainer').innerHTML =
+    `<h2>Run Sheet — ${day.dateLabel}${groupFilter ? ' — ' + groupFilter : ''}</h2><div class="run-sheet-body">${roomsHtml}</div>`;
+}
+
+function openRunSheetPreview() {
+  renderRunSheet(document.getElementById('runSheetGroupFilter').value);
+  document.getElementById('runSheetModal').classList.add('open');
+}
+function closeRunSheetPreview() {
+  document.getElementById('runSheetModal').classList.remove('open');
+}
+document.getElementById('printRunSheetBtn').addEventListener('click', openRunSheetPreview);
+document.getElementById('runSheetGroupFilter').addEventListener('change', () => {
+  if (document.getElementById('runSheetModal').classList.contains('open')) openRunSheetPreview();
+});
+document.getElementById('runSheetCloseBtn').addEventListener('click', closeRunSheetPreview);
+document.getElementById('runSheetModal').addEventListener('click', (e) => {
+  if (e.target.id === 'runSheetModal') closeRunSheetPreview();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('runSheetModal').classList.contains('open')) closeRunSheetPreview();
+});
+document.getElementById('runSheetPrintBtn').addEventListener('click', () => {
+  document.body.classList.add('print-runsheet');
+  window.print();
+});
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('print-runsheet');
+});
+
 // Keep the fade, now-line, and snapshot honest if this is left open on a floor monitor —
 // including across a real midnight rollover, when TODAY itself changes underneath the page.
 setInterval(() => {
@@ -1456,6 +1634,7 @@ renderDateRangeSubtitle();
 renderDayTabs();
 renderRooms();
 renderFlagsPanel();
+populateRunSheetGroupFilter();
 if (activeDay().date === TODAY) {
   slider.value = Math.min(Math.max(nowMinutes(), DAY_START), DAY_END);
 }
