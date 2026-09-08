@@ -166,7 +166,10 @@ def main():
     new_archive_html = rebuild_html(archive_shell, archive_data)
     open(ARCHIVE_HTML, "w", encoding="utf-8").write(new_archive_html)
 
-    print(f"\nDone. Compass_CURRENT.html + index.html now cover {keep_days[0]['date']} - {keep_days[-1]['date']}.")
+    if keep_days:
+        print(f"\nDone. Compass_CURRENT.html + index.html now cover {keep_days[0]['date']} - {keep_days[-1]['date']}.")
+    else:
+        print("\nDone. Compass_CURRENT.html + index.html now cover 0 days (everything archived) -- ready for a new batch.")
     print(f"Compass_ARCHIVE.html now covers {archive_data['days'][0]['date']} - {archive_data['days'][-1]['date']} "
           f"({len(archive_data['days'])} day(s) total).")
 
