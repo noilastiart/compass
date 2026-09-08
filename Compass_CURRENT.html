@@ -977,6 +977,8 @@ const diagramPanelImg = document.getElementById('diagramPanelImg');
 const diagramPanelTitle = document.getElementById('diagramPanelTitle');
 const diagramPanelSub = document.getElementById('diagramPanelSub');
 
+let openDiagramKey = null;
+
 function openDiagramPanel(key, title, sub) {
   const d = DATA.diagrams && DATA.diagrams[key];
   if (!d) return;
@@ -988,9 +990,22 @@ function openDiagramPanel(key, title, sub) {
   diagramPanelTitle.textContent = title || 'Room diagram';
   diagramPanelSub.textContent = sub || '';
   diagramPanel.classList.add('open');
+  openDiagramKey = key;
 }
 function closeDiagramPanel() {
   diagramPanel.classList.remove('open');
+  openDiagramKey = null;
+}
+// Clicking the same diagram icon that's currently open closes it (a toggle);
+// clicking a different event's diagram icon while one is open switches to
+// that diagram instead of closing. The X button and this are the only ways
+// to close -- clicking elsewhere on the page still leaves the panel open.
+function toggleDiagramPanel(key, title, sub) {
+  if (diagramPanel.classList.contains('open') && openDiagramKey === key) {
+    closeDiagramPanel();
+  } else {
+    openDiagramPanel(key, title, sub);
+  }
 }
 document.getElementById('diagramPanelClose').addEventListener('click', closeDiagramPanel);
 
@@ -1202,7 +1217,7 @@ function addBlock(track, className, start, end, opts) {
     block.classList.add('has-diagram');
     const openThisDiagram = (e) => {
       e.stopPropagation();
-      openDiagramPanel(opts.diagramKey, opts.tooltipTitle, opts.groupName);
+      toggleDiagramPanel(opts.diagramKey, opts.tooltipTitle, opts.groupName);
     };
     block.addEventListener('click', openThisDiagram);
     // Real sibling element in the track (not a pseudo-element on the block),
