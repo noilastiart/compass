@@ -618,6 +618,24 @@
     color: #10141a;
     transform: scale(1.15);
   }
+  /* BEO#/diagram mismatch escalation (standing rule) -- yellow >7 days out, red within
+     7 days. Severity is computed fresh from TODAY on every render, never baked in, so
+     it escalates on its own as the calendar crosses the 7-day mark. */
+  .diagram-badge-mismatch-yellow {
+    border-color: #e0c34a;
+    color: #e0c34a;
+    box-shadow: 0 0 0 2px #e0c34a55, 0 1px 4px #000a;
+  }
+  .diagram-badge-mismatch-red {
+    border-color: var(--red);
+    color: var(--red);
+    box-shadow: 0 0 0 2px #ff4d4d66, 0 1px 4px #000a;
+    animation: diagram-mismatch-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes diagram-mismatch-pulse {
+    0%, 100% { box-shadow: 0 0 0 2px #ff4d4d66, 0 1px 4px #000a; }
+    50% { box-shadow: 0 0 0 4px #ff4d4daa, 0 1px 4px #000a; }
+  }
   /* Larger-than-visual hit area via a transparent padded halo */
   .diagram-badge::before {
     content: '';
@@ -1162,6 +1180,22 @@ function tooltipHtml(titleText, timeRange, statusRev, flags, notes, groupName, c
   return html;
 }
 
+// Standing rule: a diagram page whose OWN printed BEO# doesn't match the event it's
+// wired to is not baked into static data as yellow/red -- it's computed fresh from
+// TODAY every time this runs, so a flag left untouched escalates to red on its own as
+// the calendar crosses the 7-day mark, with no new parse required. A diagram with no
+// printed BEO# at all (a positional match) is not an error and never gets this treatment.
+function diagramMismatchInfo(diagramEntry, eventDateISO) {
+  if (!diagramEntry || diagramEntry.matchType !== 'mismatched' || !eventDateISO) return null;
+  const daysUntil = Math.round((new Date(eventDateISO) - new Date(TODAY)) / 86400000);
+  const severity = daysUntil > 7 ? 'yellow' : 'red';
+  const printedBeo = diagramEntry.printedBeo || '?';
+  const text = severity === 'yellow'
+    ? `Diagram prints BEO #${printedBeo}, not this event's BEO# -- watch this, likely resolves on next weekly parse (${daysUntil}d out).`
+    : `Diagram prints BEO #${printedBeo}, not this event's BEO# -- URGENT, needs a human look now (${daysUntil}d out).`;
+  return { severity, text };
+}
+
 function addBlock(track, className, start, end, opts) {
   const block = document.createElement('div');
   block.className = 'block ' + className + (opts.conflict ? ' has-conflict' : '') +
@@ -1231,6 +1265,11 @@ function addBlock(track, className, start, end, opts) {
     badge.style.left = `calc(${pct(end)}% - 9px)`;
     badge.style.top = ((opts.top != null ? opts.top : 3) - 8) + 'px';
     badge.title = 'View floor-plan diagram';
+    const mismatch = diagramMismatchInfo(DATA.diagrams[opts.diagramKey], opts.eventDate);
+    if (mismatch) {
+      badge.classList.add('diagram-badge-mismatch-' + mismatch.severity);
+      badge.title = mismatch.text;
+    }
     badge.addEventListener('click', openThisDiagram);
     track.appendChild(badge);
   }
@@ -1386,7 +1425,7 @@ function renderRooms() {
           addBlock(track, 'block-banquet', item.start, item.end, {
             layer: 'banquet', tooltipTitle: `Banquet setup — ${ev.label}`, rev, flags: ev.flags, notes: ev.setupNotes,
             groupName: ev.group, conflict: hasConflict, conflictNote: ev.conflictNote, top, height,
-            diagramKey: ev.diagramKey, eventCategory: ev.eventCategory,
+            diagramKey: ev.diagramKey, eventDate: day.date, eventCategory: ev.eventCategory,
             eveningSetup: ev.eveningSetup, eveningSetupNote: ev.eveningSetupNote
           });
         } else if (kind === 'av') {
@@ -1401,7 +1440,7 @@ function renderRooms() {
             tooltipTitle: ev.label, rev, flags: ev.flags, notes: ev.setupNotes,
             groupName: ev.group, groupColor, groupInitial, conflict: hasConflict, conflictNote: ev.conflictNote,
             top, height,
-            diagramKey: hasBanquetBlock ? undefined : ev.diagramKey, eventCategory: ev.eventCategory
+            diagramKey: hasBanquetBlock ? undefined : ev.diagramKey, eventDate: day.date, eventCategory: ev.eventCategory
           });
         }
       });
@@ -1636,6 +1675,7 @@ setInterval(() => {
   if (freshToday !== TODAY) {
     TODAY = freshToday;
     renderDayTabs();
+    renderRooms(); // re-evaluate diagram-mismatch escalation (yellow/red) against the new TODAY
   }
   applyPastFade();
   if (activeDay().date === TODAY) {
