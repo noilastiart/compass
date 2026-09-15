@@ -1576,16 +1576,27 @@ function renderRooms() {
     });
 
     // Only compress a lane into stacked sub-rows when it actually needs to disambiguate
-    // a genuine collision — two DIFFERENT groups' blocks overlapping in time. The very
-    // common pattern of one group's own nested sub-events (e.g. a lunch buffet served
-    // inside an all-day meeting hold) is not a conflict and should keep the original
-    // bold, full-height look rather than get thinned out along with everything else.
-    function hasCrossGroupOverlap(items) {
+    // a genuine collision. A same-group pair is exempt ONLY when it's true nesting --
+    // one block fully contained inside the other AND meaningfully shorter (a lunch
+    // buffet served inside an all-day meeting hold) -- since that pattern reads fine
+    // unstacked, as a thin inset over the bigger block. Group membership alone is not
+    // the deciding factor: two same-group blocks of comparable size or duration that
+    // merely overlap (near-duplicate time ranges, one running past the other's end)
+    // are just as unreadable unstacked as a cross-group collision, so those stack too.
+    const NESTED_MAX_RATIO = 0.4;
+    function isNestedPair(a, b) {
+      const aDur = a.end - a.start, bDur = b.end - b.start;
+      const small = aDur <= bDur ? a : b;
+      const big = aDur <= bDur ? b : a;
+      const smallDur = small.end - small.start, bigDur = big.end - big.start;
+      const fullyContained = small.start >= big.start && small.end <= big.end;
+      return fullyContained && smallDur <= bigDur * NESTED_MAX_RATIO;
+    }
+    function needsStacking(items) {
       for (let i = 0; i < items.length; i++) {
         for (let j = i + 1; j < items.length; j++) {
           const a = items[i], b = items[j];
-          if (a.ev.group === b.ev.group) continue;
-          if (a.start < b.end && b.start < a.end) return true;
+          if (a.start < b.end && b.start < a.end && !isNestedPair(a, b)) return true;
         }
       }
       return false;
@@ -1593,7 +1604,7 @@ function renderRooms() {
 
     const rowCounts = {};
     LANE_ORDER.forEach(k => {
-      rowCounts[k] = hasCrossGroupOverlap(bandItems[k]) ? layoutBand(bandItems[k]) : (bandItems[k].length ? 1 : 0);
+      rowCounts[k] = needsStacking(bandItems[k]) ? layoutBand(bandItems[k]) : (bandItems[k].length ? 1 : 0);
     });
 
     let cursor = DEFAULT_TOP.banquet;
@@ -1777,6 +1788,8 @@ document.querySelectorAll('.layer-toggle').forEach(toggle => {
     if (activeLayers.has(layer)) { activeLayers.delete(layer); toggle.classList.remove('active'); }
     else { activeLayers.add(layer); toggle.classList.add('active'); }
     applyLayerFilter();
+    // Keep an already-open run sheet preview honest if toggles change while it's up.
+    if (document.getElementById('runSheetModal').classList.contains('open')) openRunSheetPreview();
   });
 });
 
@@ -1807,15 +1820,39 @@ function runSheetSetupClass(ev) {
 }
 
 function runSheetSortKey(ev) {
+  const bands = eventActiveBands(ev);
+  if (bands.length) return Math.min(...bands.map(b => b.start));
   if (ev.banquetStart != null) return ev.banquetStart;
   if (ev.avStart != null) return ev.avStart;
   return ev.liveStart != null ? ev.liveStart : 0;
 }
 
+// Reuses the same `activeLayers` Set the main timeline's phase toggles already
+// write to -- not a second/parallel filter -- so the run sheet always reflects
+// whatever Setup/AV/Live/Flip toggles are currently on when it's built.
+function eventActiveBands(ev) {
+  const bands = [];
+  if (ev.banquetStart != null && ev.banquetEnd != null && activeLayers.has('banquet')) {
+    bands.push({ start: ev.banquetStart, end: ev.banquetEnd });
+  }
+  if (ev.avStart != null && ev.avEnd != null && activeLayers.has('av')) {
+    bands.push({ start: ev.avStart, end: ev.avEnd });
+  }
+  if (ev.liveStart != null && ev.liveEnd != null && activeLayers.has('live')) {
+    bands.push({ start: ev.liveStart, end: ev.liveEnd });
+  }
+  if (ev.flipAfterEnd != null && activeLayers.has('flip')) {
+    bands.push({ start: ev.liveEnd, end: ev.flipAfterEnd });
+  }
+  return bands;
+}
+
 function runSheetTimeRange(ev) {
-  const start = ev.banquetStart != null ? ev.banquetStart : (ev.avStart != null ? ev.avStart : ev.liveStart);
-  const end = ev.liveEnd != null ? ev.liveEnd : (ev.avEnd != null ? ev.avEnd : ev.banquetEnd);
-  return (start != null && end != null) ? `${fmtTime(start)} – ${fmtTime(end)}` : '';
+  const bands = eventActiveBands(ev);
+  if (!bands.length) return '';
+  const start = Math.min(...bands.map(b => b.start));
+  const end = Math.max(...bands.map(b => b.end));
+  return `${fmtTime(start)} – ${fmtTime(end)}`;
 }
 
 function populateRunSheetGroupFilter() {
@@ -1830,20 +1867,31 @@ function populateRunSheetGroupFilter() {
 
 function renderRunSheet(groupFilter) {
   const day = activeDay();
+  // An event is included only if it still has at least one band in a
+  // currently-active layer -- same rule the main timeline uses to decide
+  // whether a block is visible at all, just applied per-event instead of
+  // per-block since the run sheet is one row per event, not per phase.
   const rooms = day.rooms
-    .map(room => ({ name: room.name, events: room.events.filter(ev => !groupFilter || ev.group === groupFilter) }))
+    .map(room => ({
+      name: room.name,
+      events: room.events.filter(ev => (!groupFilter || ev.group === groupFilter) && eventActiveBands(ev).length)
+    }))
     .filter(room => room.events.length);
 
   const roomsHtml = rooms.map(room => {
     const events = room.events.slice().sort((a, b) => runSheetSortKey(a) - runSheetSortKey(b));
     const eventsHtml = events.map(ev => {
       const revTag = ev.status === 'revision' ? '<span class="run-sheet-rev-tag">REVISED</span>' : '';
-      const setChip = ev.set ? `<span class="run-sheet-set-chip">Set ${ev.set}</span>` : '';
-      const setupHtml = ev.setupNotes
+      // Set count lives on the Live block on the main timeline, so it's gated
+      // the same way here -- hidden whenever Live is toggled off.
+      const setChip = (activeLayers.has('live') && ev.set) ? `<span class="run-sheet-set-chip">Set ${ev.set}</span>` : '';
+      const setupHtml = (activeLayers.has('banquet') && ev.setupNotes)
         ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">Setup:</span>${ev.setupNotes}</div>` : '';
-      const avHtml = ev.avNotes
-        ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">AV:</span>${ev.avNotes}</div>`
-        : `<div class="run-sheet-notes run-sheet-av-none"><span class="run-sheet-notes-label">AV:</span>No AV</div>`;
+      const avHtml = activeLayers.has('av')
+        ? (ev.avNotes
+            ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">AV:</span>${ev.avNotes}</div>`
+            : `<div class="run-sheet-notes run-sheet-av-none"><span class="run-sheet-notes-label">AV:</span>No AV</div>`)
+        : '';
       return `<div class="run-sheet-event ${runSheetSetupClass(ev)}">
         <div class="run-sheet-event-head">
           <span>${revTag}${ev.label}${ev.group ? ` — ${ev.group}` : ''}${setChip}</span>
