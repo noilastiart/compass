@@ -784,8 +784,15 @@
 
   /* --- Print: one landscape page --- */
   @media print {
-    @page { size: landscape; margin: 0.35in; }
-    body { padding: 0; background: #fff; color: #141a21; font-size: 10px; }
+    /* margin: 0 on @page removes the space Chrome/Safari/Firefox use to print their own
+       default header (page title + date) and footer (URL + page number) -- that's how a
+       printed run sheet ended up carrying a live URL once already. This isn't something
+       Compass's own HTML/CSS ever printed; it's the browser's print chrome, and it can't
+       be reliably suppressed by asking whoever prints to remember to untick "Headers and
+       footers" in the print dialog. Equivalent visual whitespace is restored below via
+       body padding instead, so the page margin means the same thing to the eye. */
+    @page { size: landscape; margin: 0; }
+    body { padding: 0.35in; background: #fff; color: #141a21; font-size: 10px; }
     h1 { color: #141a21; font-size: 18px; }
     .subtitle { color: #555; margin-bottom: 12px; }
     .slider-wrap, .layer-toggles, .tooltip, .no-print-hide { display: none !important; }
