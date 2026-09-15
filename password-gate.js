@@ -6,7 +6,7 @@
 // Scoped to GitHub Pages ONLY via a hostname check -- laporta.tech (and any other host this
 // file might ever be served from) is left completely alone, no prompt, no wipe, nothing.
 if (location.hostname.endsWith('.github.io')) {
-  const PAGES_PASSWORD = "CHANGEME"; // <-- set the real password here
+  const PAGES_PASSWORD = "Cellardoor"; // <-- set the real password here
   const pw = prompt("Enter password:");
   if (pw !== PAGES_PASSWORD) {
     document.body.innerHTML = "<h1 style='color:white;text-align:center;margin-top:40vh;'>Access denied</h1>";
