@@ -1007,6 +1007,7 @@
   <div class="layer-toggle active" data-layer="flip"><span class="swatch" style="background:repeating-linear-gradient(45deg,#4a5a6c80,#4a5a6c80 4px,#5a6b7d80 4px,#5a6b7d80 8px)"></span> Flip / turnover</div>
   <div class="layer-toggle active" data-layer="diagram"><span class="swatch swatch-icon">⛶</span> Diagrams</div>
   <div class="layer-toggle active" data-layer="evening-setup"><span class="swatch swatch-icon" style="color:var(--amber)">◐</span> Evening Setup</div>
+  <div class="layer-toggle active" data-layer="notes"><span class="swatch swatch-icon">✉</span> Notes</div>
   <div class="print-hint">Toggle layers to isolate what you need to share or print</div>
 </div>
 
@@ -1489,10 +1490,12 @@ function addBlock(track, className, start, end, opts) {
     moon.addEventListener('click', (e) => { e.stopPropagation(); showMoonTip(); });
     track.appendChild(moon);
   }
-  if (opts.noteKey) {
+  // Same one-per-event, content-gated pattern as the diagram badge: only
+  // appears once a note actually exists for this block, not as a standing
+  // "add a note" affordance -- keeps the timeline clutter-free by default.
+  if (opts.noteKey && getNote(opts.noteKey)) {
     const noteBadge = document.createElement('div');
-    noteBadge.className = 'note-badge';
-    if (getNote(opts.noteKey)) noteBadge.classList.add('note-badge-has-content');
+    noteBadge.className = 'note-badge note-badge-has-content';
     noteBadge.textContent = '✉';
     noteBadge.style.left = `calc(${pct(start)}% - 8px)`;
     noteBadge.style.top = ((opts.top != null ? opts.top : 3) + (opts.height != null ? opts.height : 13) + 2) + 'px';
@@ -1781,7 +1784,7 @@ function update() {
 
 slider.addEventListener('input', update);
 
-const activeLayers = new Set(['banquet', 'av', 'live', 'flip', 'diagram', 'evening-setup']);
+const activeLayers = new Set(['banquet', 'av', 'live', 'flip', 'diagram', 'evening-setup', 'notes']);
 document.querySelectorAll('.layer-toggle').forEach(toggle => {
   toggle.addEventListener('click', () => {
     const layer = toggle.dataset.layer;
@@ -1807,6 +1810,10 @@ function applyLayerFilter() {
   const showEvening = activeLayers.has('evening-setup');
   document.querySelectorAll('.evening-setup-badge').forEach(badge => {
     badge.style.display = showEvening ? '' : 'none';
+  });
+  const showNotes = activeLayers.has('notes');
+  document.querySelectorAll('.note-badge').forEach(badge => {
+    badge.style.display = showNotes ? '' : 'none';
   });
 }
 
