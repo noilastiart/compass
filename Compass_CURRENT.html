@@ -357,6 +357,12 @@
       #5a6b7d80 8px
     );
     border: 1px dashed #5a6b7d;
+    color: var(--text-dim);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: 0.2px;
   }
   .block-flip-warning {
     background: repeating-linear-gradient(
@@ -366,6 +372,12 @@
       #b8323280 4px,
       #b8323280 8px
     );
+    color: #fff;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: 0.2px;
     border: 1px dashed var(--red);
   }
 
@@ -924,8 +936,8 @@
     .block-banquet { background: #4f8f7d !important; }
     .block-av { background: #6b7fd4 !important; }
     .block-live { background: var(--gold) !important; color: #141a21 !important; font-size: 8px; }
-    .block-flip { background: repeating-linear-gradient(45deg,#c8d4de,#c8d4de 3px,#a8b8c5 3px,#a8b8c5 6px) !important; border: 1px dashed #5a6b7d; }
-    .block-flip-warning { background: repeating-linear-gradient(45deg,#e0b3b3,#e0b3b3 3px,#cf8a8a 3px,#cf8a8a 6px) !important; border: 1px dashed #8b1a1a; }
+    .block-flip { background: repeating-linear-gradient(45deg,#c8d4de,#c8d4de 3px,#a8b8c5 3px,#a8b8c5 6px) !important; border: 1px dashed #5a6b7d; color: #2a3a4a !important; }
+    .block-flip-warning { background: repeating-linear-gradient(45deg,#e0b3b3,#e0b3b3 3px,#cf8a8a 3px,#cf8a8a 6px) !important; border: 1px dashed #8b1a1a; color: #5a1010 !important; }
     .block.is-past { opacity: 0.4; filter: grayscale(70%); }
     .now-line { display: none; }
     .legend { border-top: 1px solid #a8b8c5; color: #444; font-size: 9px; }
@@ -1545,6 +1557,107 @@ const ROW_PITCH = 16;
 const TRACK_BASE_HEIGHT = 46;
 const TRACK_BOTTOM_PAD = 5;
 
+// --- Flip-too-tight detection ---
+// A flip is a visibility flag only -- it never blocks or overrides what's
+// booked, it just surfaces windows worth a second look. It's computed live,
+// per room, per day: the gap between when one event's occupancy of the room
+// actually ends and when the NEXT event's own physical setup work begins.
+
+// Room occupancy = the widest span this event actually holds the room, across
+// whichever of its own banquet/AV/live phases exist.
+function occupancyStart(ev) {
+  const vals = [ev.banquetStart, ev.avStart, ev.liveStart].filter(v => v != null);
+  return vals.length ? Math.min(...vals) : null;
+}
+function occupancyEnd(ev) {
+  const vals = [ev.banquetEnd, ev.avEnd, ev.liveEnd].filter(v => v != null);
+  return vals.length ? Math.max(...vals) : null;
+}
+
+// Only a genuine physical reset is worth evaluating for tightness -- a break,
+// refresh, or any other service touchpoint that continues an unchanged room
+// build is not a flip, no matter how little time sits between it and the
+// event before it. Two established, already-in-use signals decide this
+// without needing a new authored field:
+//  1. No banquet (setup) phase at all on the next event -- it simply inherits
+//     the room as-is, so there's nothing to reset for it.
+//  2. The banquet phase's own setup text says so, via the same two textual
+//     conventions BEOs already use consistently: "Existing Setup" (a stated
+//     continuation), or setup language that -- once the near-universal
+//     "Have set by...", "***SEE DIAGRAM***", and routine linen/trash-refresh
+//     boilerplate is stripped out -- is airwall-move language and nothing
+//     else (the standing lightweight-flip rule: an airwall move alone is
+//     never heavy, even if a diagram is referenced alongside it).
+// This is a heuristic over free-text BEO language, same as the existing
+// lightweight-vs-heavy classification it extends -- genuinely ambiguous
+// wording can still slip through either direction, same as that rule already
+// acknowledges.
+const AIRWALL_ONLY_VOCAB = new Set(['airwall', 'airwalls', 'open', 'close', 'closed', 'opened',
+  'remove', 'removed', 'add', 'added', 'the', 'both', 'between', 'and', 'wall', 'walls',
+  'i', 'ii', 'iii', 'iv']);
+function isGenuineSetupReset(setupNotes) {
+  if (!setupNotes) return false;
+  if (/^\s*existing\s+setup\b/i.test(setupNotes)) return false;
+  let stripped = setupNotes
+    .replace(/have\s+set\s+by[^.!]*[.!]?/gi, ' ')
+    .replace(/see\s+diagram/gi, ' ')
+    .replace(/refresh\s+(any\s+)?dirty\s+linens?,?\s*(and\s+)?(remove\s+trash)?/gi, ' ');
+  const words = stripped.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  if (!words.length) return false;
+  if (words.every(w => AIRWALL_ONLY_VOCAB.has(w))) return false;
+  return true;
+}
+
+// Threshold scales with how much of the physical space is actually in play --
+// sales' own booking software checks flip windows per individual sub-room and
+// has no concept of a combined space, so a flip here is always assessed for
+// the FULL combined room string an event already lives in (Compass never
+// decomposes a combined room like "Windsor I & II & III" back into its parts),
+// which by itself satisfies "evaluate at the combined-space level." Sub-room
+// count is the scope proxy -- square footage isn't populated anywhere in the
+// live data (checked: every room's sqft field is null), so it isn't usable
+// today. 90 minutes as a baseline for a single small room, +30 min per
+// additional sub-room folded into the combined space, so a full four-room
+// Windsor Ballroom reset gets 3 hours of buffer before it's flagged tight.
+function roomSubRoomCount(roomName) {
+  if (roomName === 'Windsor Ballroom') return 4;
+  if (roomName === 'Parliament') return 3;
+  const parts = roomName.split(/[,&]/).map(s => s.trim()).filter(Boolean);
+  return Math.max(parts.length, 1);
+}
+const FLIP_BASE_THRESHOLD_MIN = 90;
+const FLIP_PER_SUBROOM_MIN = 30;
+function flipThresholdMinutes(roomName) {
+  return FLIP_BASE_THRESHOLD_MIN + (roomSubRoomCount(roomName) - 1) * FLIP_PER_SUBROOM_MIN;
+}
+
+// Walks a room's events in chronological order (by when each first occupies
+// the room) and flags the gap before any event whose own setup phase is a
+// genuine reset. Only adjacent pairs are considered -- gaps only exist
+// between events that don't otherwise overlap, and a zero-or-negative gap
+// (back-to-back, or advance setup starting before the prior event vacates)
+// isn't a turnover window at all, so nothing renders for it.
+// Note: this only evaluates gaps within a single calendar day -- an overnight
+// flip spanning midnight isn't compared against the next day's first event.
+function computeFlipGaps(room) {
+  const chrono = room.events
+    .map(ev => ({ ev, start: occupancyStart(ev), end: occupancyEnd(ev) }))
+    .filter(x => x.start != null && x.end != null)
+    .sort((a, b) => a.start - b.start);
+  const gaps = [];
+  for (let i = 0; i < chrono.length - 1; i++) {
+    const a = chrono[i], b = chrono[i + 1].ev;
+    if (b.banquetStart == null || b.banquetEnd == null) continue;
+    if (!isGenuineSetupReset(b.setupNotes)) continue;
+    const gapStart = a.end, gapEnd = b.banquetStart;
+    if (gapEnd <= gapStart) continue;
+    const gapMin = gapEnd - gapStart;
+    const threshold = flipThresholdMinutes(room.name);
+    gaps.push({ start: gapStart, end: gapEnd, gapMin, threshold, tight: gapMin < threshold, fromEv: a.ev, toEv: b });
+  }
+  return gaps;
+}
+
 function renderRooms() {
   roomRowsEl.innerHTML = '';
   const day = activeDay();
@@ -1572,9 +1685,6 @@ function renderRooms() {
       }
       if (ev.liveStart != null && ev.liveEnd != null) {
         bandItems.live.push({ start: ev.liveStart, end: ev.liveEnd, kind: 'live', ev });
-      }
-      if (ev.flipAfterEnd) {
-        bandItems.banquet.push({ start: ev.liveEnd, end: ev.flipAfterEnd, kind: 'flip', ev });
       }
     });
 
@@ -1626,15 +1736,6 @@ function renderRooms() {
         const ev = item.ev;
         const top = stacked ? laneTop[kind] + item.row * ROW_PITCH : laneTop[kind];
         const height = stacked ? ROW_H : (trackHeight - laneTop[kind]);
-
-        if (item.kind === 'flip') {
-          const flipClass = ev.flipTight ? 'block-flip-warning' : 'block-flip';
-          addBlock(track, flipClass, item.start, item.end, {
-            layer: 'flip', tooltipTitle: `Turnover window (${item.end - item.start} min)`,
-            groupName: ev.group, top, height
-          });
-          return;
-        }
 
         const rev = ev.status === 'revision';
         const groupColor = GROUP_COLOR[ev.group] || 'var(--text-faint)';
@@ -1697,6 +1798,23 @@ function renderRooms() {
       }
     });
 
+    // Render the gap itself as its own full-height segment in this room's
+    // row, rather than a badge on either adjacent block -- so a tight flip
+    // reads directly off the timeline (including several stacked up across
+    // different rooms in the same window) without opening anything.
+    computeFlipGaps(room).forEach(gap => {
+      const flipClass = gap.tight ? 'block-flip-warning' : 'block-flip';
+      addBlock(track, flipClass, gap.start, gap.end, {
+        layer: 'flip', showLabel: true, labelText: gap.tight ? 'Flip too tight' : 'Flip / turnover',
+        tooltipTitle: gap.tight ? '⚠ Flip too tight' : 'Flip / turnover',
+        groupName: gap.toEv.group,
+        notes: `${gap.gapMin} min between "${gap.fromEv.label}" and "${gap.toEv.label}" — this room's flip ` +
+          `threshold is ${gap.threshold} min (scales with combined-space scope). Visibility flag only — ` +
+          `never blocks or overrides what's booked.`,
+        top: 3, height: trackHeight - 6
+      });
+    });
+
     row.appendChild(track);
     roomRowsEl.appendChild(row);
   });
@@ -1725,8 +1843,10 @@ function currentStateForRoom(room, mins) {
     if (ev.liveStart != null && mins >= ev.liveStart && mins < ev.liveEnd) {
       return { phase: 'LIVE', color: 'var(--live-bright)', label: ev.label };
     }
-    if (ev.flipAfterEnd && mins >= ev.liveEnd && mins < ev.flipAfterEnd) {
-      return { phase: ev.flipTight ? 'Turnover — TIGHT' : 'Flip / turnover', color: ev.flipTight ? 'var(--red)' : '#5a6b7d', label: '' };
+  }
+  for (const gap of computeFlipGaps(room)) {
+    if (mins >= gap.start && mins < gap.end) {
+      return { phase: gap.tight ? 'Turnover — TIGHT' : 'Flip / turnover', color: gap.tight ? 'var(--red)' : '#5a6b7d', label: '' };
     }
   }
   return { phase: 'Open / idle', color: '#3a4a5c', label: '' };
@@ -1847,9 +1967,6 @@ function eventActiveBands(ev) {
   }
   if (ev.liveStart != null && ev.liveEnd != null && activeLayers.has('live')) {
     bands.push({ start: ev.liveStart, end: ev.liveEnd });
-  }
-  if (ev.flipAfterEnd != null && activeLayers.has('flip')) {
-    bands.push({ start: ev.liveEnd, end: ev.flipAfterEnd });
   }
   return bands;
 }
