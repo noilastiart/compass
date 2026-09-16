@@ -665,9 +665,9 @@
     width: 17px;
     height: 17px;
     border-radius: 50%;
-    background: #e8e4d8;
-    color: #3a3226;
-    border: 1.5px solid #3a3226;
+    background: transparent;
+    color: var(--text-dim);
+    border: 1.5px solid var(--text-dim);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -675,11 +675,21 @@
     line-height: 1;
     cursor: pointer;
     z-index: 6;
-    box-shadow: 0 1px 4px #000a;
-    transition: transform 0.1s ease;
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.1s ease;
   }
   .note-badge:hover { transform: scale(1.15); }
-  .note-badge-has-content { background: var(--gold-bright); border-color: #3a3226; }
+  /* Faint discovery affordance while hovering the block (or the badge itself)
+     on a block with no note yet -- otherwise invisible, so the default view
+     stays uncluttered but adding a first note is still reachable. */
+  .note-badge-hover-visible { opacity: 0.55; }
+  .note-badge-has-content {
+    background: var(--gold-bright);
+    color: #3a3226;
+    border-color: #3a3226;
+    box-shadow: 0 1px 4px #000a;
+    opacity: 1 !important;
+  }
   .note-badge::before {
     content: '';
     position: absolute;
@@ -1502,21 +1512,30 @@ function addBlock(track, className, start, end, opts) {
     moon.addEventListener('click', (e) => { e.stopPropagation(); showMoonTip(); });
     track.appendChild(moon);
   }
-  // Same one-per-event, content-gated pattern as the diagram badge: only
-  // appears once a note actually exists for this block, not as a standing
-  // "add a note" affordance -- keeps the timeline clutter-free by default.
-  if (opts.noteKey && getNote(opts.noteKey)) {
+  // Always present so a first note is still reachable, but only fully
+  // visible once it actually has content -- otherwise it's a faint outline
+  // that only fades in on hover (of the block or the badge itself), same
+  // discovery pattern as the tooltip above, so the default view stays
+  // uncluttered without losing the ability to add a note to a fresh block.
+  if (opts.noteKey) {
+    const hasNote = !!getNote(opts.noteKey);
     const noteBadge = document.createElement('div');
-    noteBadge.className = 'note-badge note-badge-has-content';
+    noteBadge.className = 'note-badge' + (hasNote ? ' note-badge-has-content' : '');
     noteBadge.textContent = '✉';
     noteBadge.style.left = `calc(${pct(start)}% - 8px)`;
     noteBadge.style.top = ((opts.top != null ? opts.top : 3) + (opts.height != null ? opts.height : 13) + 2) + 'px';
-    noteBadge.title = 'Personal note';
+    noteBadge.title = hasNote ? 'Personal note' : 'Add a note';
     const openThisNote = (e) => {
       e.stopPropagation();
       toggleNotesPanel(opts.noteKey, opts.tooltipTitle, opts.groupName);
     };
     noteBadge.addEventListener('click', openThisNote);
+    const showNoteBadge = () => noteBadge.classList.add('note-badge-hover-visible');
+    const hideNoteBadge = () => noteBadge.classList.remove('note-badge-hover-visible');
+    block.addEventListener('mouseenter', showNoteBadge);
+    block.addEventListener('mouseleave', hideNoteBadge);
+    noteBadge.addEventListener('mouseenter', showNoteBadge);
+    noteBadge.addEventListener('mouseleave', hideNoteBadge);
     track.appendChild(noteBadge);
   }
   track.appendChild(block);
