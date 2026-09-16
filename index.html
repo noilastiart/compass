@@ -364,13 +364,18 @@
     justify-content: center;
     letter-spacing: 0.2px;
   }
+  /* Amber, not red -- deliberately a different hue from .overlap-underlay and
+     .has-conflict, which both use the red/pink "genuine collision" family.
+     A tight flip is a visibility flag, not a conflict (sales' booking always
+     wins regardless), and the two were getting visually confused for each
+     other at a glance since both were red diagonal hatch patterns. */
   .block-flip-warning {
     background: repeating-linear-gradient(
       45deg,
-      #8b1a1a70,
-      #8b1a1a70 4px,
-      #b8323280 4px,
-      #b8323280 8px
+      #a6782870,
+      #a6782870 4px,
+      #d9a44180 4px,
+      #d9a44180 8px
     );
     color: #fff;
     font-weight: 700;
@@ -378,7 +383,7 @@
     align-items: center;
     justify-content: center;
     letter-spacing: 0.2px;
-    border: 1px dashed var(--red);
+    border: 1px dashed var(--amber);
   }
 
   /* Semi-transparent red hatch drawn over the exact time range where two
@@ -947,7 +952,7 @@
     .block-av { background: #6b7fd4 !important; }
     .block-live { background: var(--gold) !important; color: #141a21 !important; font-size: 8px; }
     .block-flip { background: repeating-linear-gradient(45deg,#c8d4de,#c8d4de 3px,#a8b8c5 3px,#a8b8c5 6px) !important; border: 1px dashed #5a6b7d; color: #2a3a4a !important; }
-    .block-flip-warning { background: repeating-linear-gradient(45deg,#e0b3b3,#e0b3b3 3px,#cf8a8a 3px,#cf8a8a 6px) !important; border: 1px dashed #8b1a1a; color: #5a1010 !important; }
+    .block-flip-warning { background: repeating-linear-gradient(45deg,#f0dcb0,#f0dcb0 3px,#dfc088 3px,#dfc088 6px) !important; border: 1px dashed #a67828; color: #4a350a !important; }
     .block.is-past { opacity: 0.4; filter: grayscale(70%); }
     .now-line { display: none; }
     .legend { border-top: 1px solid #a8b8c5; color: #444; font-size: 9px; }
@@ -1045,11 +1050,11 @@
     <div class="legend-item"><span class="legend-swatch" style="background:var(--av)"></span> AV setup</div>
     <div class="legend-item"><span class="legend-swatch" style="background:var(--live)"></span> Live event</div>
     <div class="legend-item"><span class="legend-swatch" style="background:repeating-linear-gradient(45deg,#4a5a6c80,#4a5a6c80 4px,#5a6b7d80 4px,#5a6b7d80 8px)"></span> Flip / turnover</div>
-    <div class="legend-item"><span class="legend-swatch" style="background:repeating-linear-gradient(45deg,#8b1a1a70,#8b1a1a70 4px,#b8323280 4px,#b8323280 8px)"></span> Flip too tight</div>
+    <div class="legend-item"><span class="legend-swatch" style="background:repeating-linear-gradient(45deg,#a6782870,#a6782870 4px,#d9a44180 4px,#d9a44180 8px)"></span> Flip too tight</div>
     <div class="legend-item"><span class="legend-swatch past"></span> Already past (live clock)</div>
     <div class="legend-item"><span class="legend-swatch rev" style="background:var(--red)"></span> REV — changed since original BEO</div>
   </div>
-  <div class="warning-note">⚠ Red hatch = flip window sales booked is shorter than what this setup realistically needs. Faded blocks have already happened, based on the current time.</div>
+  <div class="warning-note">⚠ Amber hatch = flip window sales booked is shorter than what this setup realistically needs (kept distinct from the red/pink overlap and conflict markers below). Faded blocks have already happened, based on the current time.</div>
   <div class="unassigned-note no-print-hide" id="unassignedNote"></div>
 </div>
 
