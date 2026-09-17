@@ -601,6 +601,13 @@
     color: #10141a;
   }
 
+  .translating-indicator {
+    margin-left: 10px;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--text-dim);
+  }
+
   .tooltip {
     position: fixed;
     background: #0a0e13;
@@ -1039,6 +1046,7 @@
     <button type="button" class="lang-toggle-btn active" data-lang="en">EN</button>
     <button type="button" class="lang-toggle-btn" data-lang="es">ES</button>
   </span>
+  <span class="translating-indicator" id="translatingIndicator" style="display:none;" data-i18n="translating_indicator">Translating…</span>
 </div>
 
 <div class="day-tabs no-print-hide" id="dayTabs"></div>
@@ -1209,7 +1217,9 @@ const I18N = {
     runsheet_heading: "Run Sheet",
     note_saved: "Saved.",
     note_cleared: "Cleared.",
-    evening_setup_title: "Likely evening setup"
+    evening_setup_title: "Likely evening setup",
+    flag_fallback_group: "General",
+    translating_indicator: "Translating…"
   },
   es: {
     print_view: "Imprimir esta vista (una página horizontal)",
@@ -1266,7 +1276,9 @@ const I18N = {
     runsheet_heading: "Hoja de Ruta",
     note_saved: "Guardado.",
     note_cleared: "Borrado.",
-    evening_setup_title: "Probable montaje nocturno"
+    evening_setup_title: "Probable montaje nocturno",
+    flag_fallback_group: "General",
+    translating_indicator: "Traduciendo…"
   }
 };
 let LANG = 'en';
@@ -1275,23 +1287,169 @@ function t(key, vars) {
   const str = (I18N[LANG] && I18N[LANG][key]) || I18N.en[key] || key;
   return vars ? str.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? vars[k] : '')) : str;
 }
-// The one standing-rule sentinel value ("No AV") that's stored as literal
-// data text but is really the app's own fixed placeholder for "field is
-// empty" -- translated on display, unlike genuine BEO-sourced notes.
-function translateDataText(s) {
-  return s === 'No AV' ? t('runsheet_no_av') : s;
-}
 function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.getAttribute('data-i18n-title')); });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-placeholder')); });
   document.documentElement.lang = LANG;
 }
-function setLang(lang) {
+
+// --- Live translation of BEO content (setup/AV notes, event titles, flags,
+// conflict/revision notes) -- everything the static I18N dictionary above
+// does NOT cover, because it's different on every BEO and can't be
+// pre-built into a lookup table. Room names and group names are never
+// routed through this -- those are proper nouns tied to real contracts and
+// floor plans and stay in their original form in both languages.
+//
+// Client-side call to Google Cloud Translation API (Basic v2, API-key auth --
+// the only version usable without a backend). The key below is meant to be
+// restricted by HTTP referrer to laporta.tech + noilastiart.github.io in the
+// Google Cloud Console; see the deployment notes for why a client-side key
+// was chosen over a serverless proxy (GitHub Pages has no serverless runtime).
+const TRANSLATE_API_KEY = "AIzaSyCJlTpLUc2uqurkVC6ZqsBft5siMusgLW4";
+const TRANSLATE_ENDPOINT = "https://translation.googleapis.com/language/translate/v2";
+const TRANSLATE_BATCH_SIZE = 100;
+const TRANSLATE_CACHE_KEY = "compassTranslateCacheEs";
+
+let translationCache = new Map();
+try {
+  const stored = JSON.parse(localStorage.getItem(TRANSLATE_CACHE_KEY) || "{}");
+  Object.keys(stored).forEach(k => translationCache.set(k, stored[k]));
+} catch (e) {}
+
+function persistTranslationCache() {
+  try {
+    const obj = {};
+    translationCache.forEach((v, k) => { obj[k] = v; });
+    localStorage.setItem(TRANSLATE_CACHE_KEY, JSON.stringify(obj));
+  } catch (e) {}
+}
+
+// Room names + group names, longest first so a longer match (e.g. "Windsor
+// Ballroom") is protected before a shorter one that might be a substring of
+// it, protected as placeholder tokens before a note string is sent to the
+// API, then restored after translation -- so a room/group name mentioned
+// inside a sentence (not just in its own structured field) survives intact.
+let PROTECTED_TERMS = [];
+function buildProtectedTerms() {
+  const names = new Set();
+  (DATA.groups || []).forEach(g => { if (g.name) names.add(g.name); });
+  (DATA.days || []).forEach(day => (day.rooms || []).forEach(r => { if (r.name) names.add(r.name); }));
+  PROTECTED_TERMS = [...names].sort((a, b) => b.length - a.length);
+}
+function protectTerms(text) {
+  let out = text;
+  const restoreMap = {};
+  PROTECTED_TERMS.forEach((term, i) => {
+    if (out.indexOf(term) === -1) return;
+    const token = `%%PT${i}%%`;
+    out = out.split(term).join(token);
+    restoreMap[token] = term;
+  });
+  return { protected: out, restoreMap };
+}
+function restoreTerms(text, restoreMap) {
+  let out = text;
+  Object.keys(restoreMap).forEach(token => { out = out.split(token).join(restoreMap[token]); });
+  return out;
+}
+
+// Walks the whole DATA tree for every piece of free-text BEO content that
+// should translate (event titles, setup/AV notes, per-event flags, global
+// flags, cross-group conflict details, unassigned-room notes, evening-setup
+// notes). Room names and group names are never collected here.
+function collectTranslatableStrings() {
+  const set = new Set();
+  const add = (s) => { if (s && s !== 'No AV') set.add(s); };
+  (DATA.days || []).forEach(day => {
+    add(day.unassignedNote);
+    (day.rooms || []).forEach(room => {
+      (room.events || []).forEach(ev => {
+        add(ev.label);
+        add(ev.setupNotes);
+        add(ev.avNotes);
+        add(ev.eveningSetupNote);
+        (ev.flags || []).forEach(add);
+      });
+    });
+  });
+  // globalFlags get displayed split into a leading "[bracket tag]" and the
+  // remaining text (see renderFlagsPanel) -- cache those same two pieces,
+  // not the whole raw string, so td() lookups at render time actually hit.
+  (DATA.globalFlags || []).forEach(f => {
+    const m = f.match(/^\[([^\]]+)\]\s*(.*)$/s);
+    if (m) { add(m[1]); add(m[2]); } else { add(f); }
+  });
+  (DATA.crossGroupConflicts || []).forEach(c => add(c.detail));
+  return [...set];
+}
+
+async function translateBatch(strings) {
+  const misses = strings.filter(s => !translationCache.has(s));
+  if (!misses.length) return;
+  for (let i = 0; i < misses.length; i += TRANSLATE_BATCH_SIZE) {
+    const chunk = misses.slice(i, i + TRANSLATE_BATCH_SIZE);
+    const protectedChunk = chunk.map(protectTerms);
+    try {
+      const res = await fetch(`${TRANSLATE_ENDPOINT}?key=${TRANSLATE_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: protectedChunk.map(p => p.protected), target: 'es', format: 'text' })
+      });
+      if (!res.ok) throw new Error(`Translate API HTTP ${res.status}`);
+      const json = await res.json();
+      const translations = json.data && json.data.translations || [];
+      translations.forEach((tr, idx) => {
+        const restored = restoreTerms(tr.translatedText, protectedChunk[idx].restoreMap);
+        translationCache.set(chunk[idx], restored);
+      });
+    } catch (e) {
+      // Network error, bad/missing key, rate limit, etc. -- leave these
+      // strings uncached so td() below falls back to the original English
+      // text rather than breaking the render or showing blank/error text.
+      console.warn('Compass translation batch failed, falling back to English for this batch:', e);
+    }
+  }
+  persistTranslationCache();
+}
+
+let translationsReady = Promise.resolve();
+function prepareLiveTranslations() {
+  if (!PROTECTED_TERMS.length) buildProtectedTerms();
+  const strings = collectTranslatableStrings();
+  translationsReady = translateBatch(strings);
+  return translationsReady;
+}
+
+// Synchronous lookup used throughout rendering -- safe to call anywhere
+// once prepareLiveTranslations() has resolved. Falls back to the original
+// English text for anything not (yet, or ever) successfully translated.
+function td(text) {
+  if (LANG !== 'es' || !text) return text;
+  return translationCache.has(text) ? translationCache.get(text) : text;
+}
+// The one standing-rule sentinel value ("No AV") is a fixed app placeholder,
+// not organic BEO text -- served from the static dictionary (instant, no
+// API round-trip) rather than the live-translation cache.
+function translateDataText(s) {
+  return s === 'No AV' ? t('runsheet_no_av') : td(s);
+}
+
+function setTranslatingIndicator(on) {
+  const el = document.getElementById('translatingIndicator');
+  if (el) el.style.display = on ? 'inline' : 'none';
+}
+
+async function setLang(lang) {
   LANG = lang;
   try { localStorage.setItem('compassLang', lang); } catch (e) {}
   document.querySelectorAll('.lang-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
   applyStaticTranslations();
+  if (lang === 'es') {
+    setTranslatingIndicator(true);
+    await prepareLiveTranslations();
+    setTranslatingIndicator(false);
+  }
   renderGroupLegend();
   renderDateRangeSubtitle();
   renderDayTabs();
@@ -1457,19 +1615,39 @@ function renderGroupLegend() {
 }
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_NAMES_ES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const WEEKDAY_NAMES_ES = ['dom','lun','mar','mié','jue','vie','sáb'];
+const parseISODate = (iso) => { const [y, m, d] = iso.split('-').map(Number); return { y, m, d }; };
+// Calendar dates aren't BEO content, but they're not proper-noun room/group
+// names either -- they're small, fully deterministic, and translate via
+// the static month/weekday tables above rather than an API round-trip.
+function dayLabel(day) {
+  if (LANG !== 'es') return day.dateLabel;
+  const { y, m, d } = parseISODate(day.date);
+  const weekday = WEEKDAY_NAMES_ES[new Date(y, m - 1, d).getDay()];
+  return `${weekday}, ${d} ${MONTH_NAMES_ES[m - 1]}`;
+}
 function renderDateRangeSubtitle() {
   const days = DATA.days || [];
   if (!days.length) { dateRangeSubtitleEl.textContent = ''; return; }
-  const parse = (iso) => { const [y, m, d] = iso.split('-').map(Number); return { y, m, d }; };
-  const first = parse(days[0].date);
-  const last = parse(days[days.length - 1].date);
+  const first = parseISODate(days[0].date);
+  const last = parseISODate(days[days.length - 1].date);
+  const months = LANG === 'es' ? MONTH_NAMES_ES : MONTH_NAMES;
   let text;
-  if (first.y === last.y && first.m === last.m) {
-    text = `${MONTH_NAMES[first.m - 1]} ${first.d}–${last.d}, ${first.y}`;
+  if (LANG === 'es') {
+    if (first.y === last.y && first.m === last.m) {
+      text = `${first.d}–${last.d} de ${months[first.m - 1]} de ${first.y}`;
+    } else if (first.y === last.y) {
+      text = `${first.d} de ${months[first.m - 1]} – ${last.d} de ${months[last.m - 1]} de ${first.y}`;
+    } else {
+      text = `${first.d} de ${months[first.m - 1]} de ${first.y} – ${last.d} de ${months[last.m - 1]} de ${last.y}`;
+    }
+  } else if (first.y === last.y && first.m === last.m) {
+    text = `${months[first.m - 1]} ${first.d}–${last.d}, ${first.y}`;
   } else if (first.y === last.y) {
-    text = `${MONTH_NAMES[first.m - 1]} ${first.d} – ${MONTH_NAMES[last.m - 1]} ${last.d}, ${first.y}`;
+    text = `${months[first.m - 1]} ${first.d} – ${months[last.m - 1]} ${last.d}, ${first.y}`;
   } else {
-    text = `${MONTH_NAMES[first.m - 1]} ${first.d}, ${first.y} – ${MONTH_NAMES[last.m - 1]} ${last.d}, ${last.y}`;
+    text = `${months[first.m - 1]} ${first.d}, ${first.y} – ${months[last.m - 1]} ${last.d}, ${last.y}`;
   }
   dateRangeSubtitleEl.textContent = text;
 }
@@ -1486,13 +1664,13 @@ function renderConflictsPanel() {
   const conflicts = conflictsForDate(day.date);
   if (!conflicts.length) {
     conflictsPanelEl.className = 'conflicts-panel is-clear';
-    conflictsPanelEl.innerHTML = `<h2>${t('conflicts_none_header')}</h2>${t('conflicts_none_body', { date: day.dateLabel })}`;
+    conflictsPanelEl.innerHTML = `<h2>${t('conflicts_none_header')}</h2>${t('conflicts_none_body', { date: dayLabel(day) })}`;
     return;
   }
   conflictsPanelEl.className = 'conflicts-panel';
-  const headerText = t(conflicts.length > 1 ? 'conflicts_count_plural' : 'conflicts_count_singular', { n: conflicts.length, date: day.dateLabel });
+  const headerText = t(conflicts.length > 1 ? 'conflicts_count_plural' : 'conflicts_count_singular', { n: conflicts.length, date: dayLabel(day) });
   conflictsPanelEl.innerHTML = `<h2>⚠ ${headerText}</h2>` +
-    `<ul>${conflicts.map(c => { const [cls, txt] = badgeFor(c.kind); return `<li><span class="kind-badge ${cls}">${txt}</span>${c.detail}</li>`; }).join('')}</ul>`;
+    `<ul>${conflicts.map(c => { const [cls, txt] = badgeFor(c.kind); return `<li><span class="kind-badge ${cls}">${txt}</span>${td(c.detail)}</li>`; }).join('')}</ul>`;
 }
 
 // Flagged for Review spans the whole file (not just the active day tab) so nothing
@@ -1507,20 +1685,23 @@ function renderFlagsPanel() {
       room.events.forEach(ev => {
         if (!ev.flags || !ev.flags.length) return;
         const list = byGroup.get(ev.group) || [];
-        ev.flags.forEach(f => list.push(`${room.name} — ${ev.label}: ${f}`));
+        ev.flags.forEach(f => list.push(`${room.name} — ${td(ev.label)}: ${td(f)}`));
         byGroup.set(ev.group, list);
       });
     });
-    if (byGroup.size) byDay.push({ dateLabel: day.dateLabel, byGroup });
+    if (byGroup.size) byDay.push({ dateLabel: dayLabel(day), byGroup });
   });
 
   // Global flags aren't tied to a single day — bucket them by their leading
-  // "[Group Name]" tag when present, otherwise under a general heading.
+  // "[Group Name]" tag when present, otherwise under a general heading. This
+  // bracket tag is a free-text batch label I write during processing, not
+  // the canonical DATA.groups[] name field, so (unlike real group names) it
+  // translates along with the rest of the note.
   const generalByGroup = new Map();
   (DATA.globalFlags || []).forEach(f => {
     const m = f.match(/^\[([^\]]+)\]\s*(.*)$/s);
-    const group = m ? m[1] : 'General';
-    const text = m ? m[2] : f;
+    const group = m ? td(m[1]) : t('flag_fallback_group');
+    const text = m ? td(m[2]) : td(f);
     const list = generalByGroup.get(group) || [];
     list.push(text);
     generalByGroup.set(group, list);
@@ -1573,7 +1754,7 @@ function renderDayTabs() {
     const isToday = day.date === TODAY;
     const hasConflict = conflictsForDate(day.date).length > 0;
     tab.className = 'day-tab' + (i === activeDayIndex ? ' active' : '') + (isToday ? ' is-today' : '');
-    tab.innerHTML = (isToday ? '<span class="today-dot"></span>' : '') + day.dateLabel + (hasConflict ? `<span class="conflict-dot" title="${t('scheduling_conflict_title')}"></span>` : '');
+    tab.innerHTML = (isToday ? '<span class="today-dot"></span>' : '') + dayLabel(day) + (hasConflict ? `<span class="conflict-dot" title="${t('scheduling_conflict_title')}"></span>` : '');
     tab.addEventListener('click', () => { activeDayIndex = i; renderDayTabs(); renderRooms(); populateRunSheetGroupFilter(); update(); });
     dayTabsEl.appendChild(tab);
   });
@@ -1962,24 +2143,25 @@ function renderRooms() {
         // note icon appears per event regardless of which phase blocks it has.
         const noteKey = `${day.date}::${room.name}::${ev.label}`;
 
+        const tdFlags = (ev.flags || []).map(td);
         if (kind === 'banquet') {
           addBlock(track, 'block-banquet', item.start, item.end, {
-            layer: 'banquet', tooltipTitle: `${t('layer_banquet')} — ${ev.label}`, rev, flags: ev.flags, notes: ev.setupNotes,
-            groupName: ev.group, conflict: hasConflict, conflictNote: ev.conflictNote, top, height,
+            layer: 'banquet', tooltipTitle: `${t('layer_banquet')} — ${td(ev.label)}`, rev, flags: tdFlags, notes: td(ev.setupNotes),
+            groupName: ev.group, conflict: hasConflict, conflictNote: td(ev.conflictNote), top, height,
             diagramKey: ev.diagramKey, eventDate: day.date, eventCategory: ev.eventCategory,
-            eveningSetup: ev.eveningSetup, eveningSetupNote: ev.eveningSetupNote, noteKey
+            eveningSetup: ev.eveningSetup, eveningSetupNote: td(ev.eveningSetupNote), noteKey
           });
         } else if (kind === 'av') {
           addBlock(track, 'block-av', item.start, item.end, {
-            layer: 'av', tooltipTitle: `${t('layer_av')} — ${ev.label}`, rev, flags: ev.flags, notes: translateDataText(ev.avNotes),
+            layer: 'av', tooltipTitle: `${t('layer_av')} — ${td(ev.label)}`, rev, flags: tdFlags, notes: translateDataText(ev.avNotes),
             groupName: ev.group, top, height,
             eventCategory: ev.eventCategory
           });
         } else {
           addBlock(track, 'block-live', item.start, item.end, {
-            layer: 'live', showLabel: true, labelText: ev.label + (ev.set ? ` (${ev.set})` : ''),
-            tooltipTitle: ev.label, rev, flags: ev.flags, notes: ev.setupNotes,
-            groupName: ev.group, groupColor, groupInitial, conflict: hasConflict, conflictNote: ev.conflictNote,
+            layer: 'live', showLabel: true, labelText: td(ev.label) + (ev.set ? ` (${ev.set})` : ''),
+            tooltipTitle: td(ev.label), rev, flags: tdFlags, notes: td(ev.setupNotes),
+            groupName: ev.group, groupColor, groupInitial, conflict: hasConflict, conflictNote: td(ev.conflictNote),
             top, height,
             diagramKey: hasBanquetBlock ? undefined : ev.diagramKey, eventDate: day.date, eventCategory: ev.eventCategory,
             noteKey: hasBanquetBlock ? undefined : noteKey
@@ -2018,7 +2200,7 @@ function renderRooms() {
         layer: 'flip', showLabel: true, labelText: gap.tight ? t('legend_flip_tight') : t('layer_flip'),
         tooltipTitle: gap.tight ? t('flip_tooltip_tight') : t('layer_flip'),
         groupName: gap.toEv.group,
-        notes: t('flip_note_template', { gap: gap.gapMin, from: gap.fromEv.label, to: gap.toEv.label, threshold: gap.threshold }),
+        notes: t('flip_note_template', { gap: gap.gapMin, from: td(gap.fromEv.label), to: td(gap.toEv.label), threshold: gap.threshold }),
         top: 3, height: trackHeight - 6
       });
     });
@@ -2030,7 +2212,7 @@ function renderRooms() {
   renderConflictsPanel();
 
   if (day.unassignedNote) {
-    unassignedNoteEl.textContent = day.unassignedNote;
+    unassignedNoteEl.textContent = td(day.unassignedNote);
     unassignedNoteEl.style.display = 'block';
   } else {
     unassignedNoteEl.style.display = 'none';
@@ -2043,13 +2225,13 @@ function renderRooms() {
 function currentStateForRoom(room, mins) {
   for (const ev of room.events) {
     if (ev.banquetStart != null && mins >= ev.banquetStart && mins < ev.banquetEnd) {
-      return { phase: t('layer_banquet'), color: 'var(--banquet-bright)', label: ev.label };
+      return { phase: t('layer_banquet'), color: 'var(--banquet-bright)', label: td(ev.label) };
     }
     if (ev.avStart != null && mins >= ev.avStart && mins < ev.avEnd) {
-      return { phase: t('layer_av'), color: 'var(--av-bright)', label: ev.label };
+      return { phase: t('layer_av'), color: 'var(--av-bright)', label: td(ev.label) };
     }
     if (ev.liveStart != null && mins >= ev.liveStart && mins < ev.liveEnd) {
-      return { phase: t('phase_live_caps'), color: 'var(--live-bright)', label: ev.label };
+      return { phase: t('phase_live_caps'), color: 'var(--live-bright)', label: td(ev.label) };
     }
   }
   for (const gap of computeFlipGaps(room)) {
@@ -2218,7 +2400,7 @@ function renderRunSheet(groupFilter) {
       // the same way here -- hidden whenever Live is toggled off.
       const setChip = (activeLayers.has('live') && ev.set) ? `<span class="run-sheet-set-chip">${t('runsheet_set_chip', { n: ev.set })}</span>` : '';
       const setupHtml = (activeLayers.has('banquet') && ev.setupNotes)
-        ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">${t('runsheet_setup_label')}</span>${ev.setupNotes}</div>` : '';
+        ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">${t('runsheet_setup_label')}</span>${td(ev.setupNotes)}</div>` : '';
       const avHtml = activeLayers.has('av')
         ? (ev.avNotes
             ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">${t('runsheet_av_label')}</span>${translateDataText(ev.avNotes)}</div>`
@@ -2226,7 +2408,7 @@ function renderRunSheet(groupFilter) {
         : '';
       return `<div class="run-sheet-event ${runSheetSetupClass(ev)}">
         <div class="run-sheet-event-head">
-          <span>${revTag}${ev.label}${ev.group ? ` — ${ev.group}` : ''}${setChip}</span>
+          <span>${revTag}${td(ev.label)}${ev.group ? ` — ${ev.group}` : ''}${setChip}</span>
           <span class="run-sheet-time">${runSheetTimeRange(ev)}</span>
         </div>
         ${setupHtml}${avHtml}
@@ -2236,7 +2418,7 @@ function renderRunSheet(groupFilter) {
   }).join('');
 
   document.getElementById('runSheetContainer').innerHTML =
-    `<h2>${t('runsheet_heading')} — ${day.dateLabel}${groupFilter ? ' — ' + groupFilter : ''}</h2><div class="run-sheet-body">${roomsHtml}</div>`;
+    `<h2>${t('runsheet_heading')} — ${dayLabel(day)}${groupFilter ? ' — ' + groupFilter : ''}</h2><div class="run-sheet-body">${roomsHtml}</div>`;
 }
 
 function openRunSheetPreview() {
@@ -2285,17 +2467,28 @@ document.querySelectorAll('.lang-toggle-btn').forEach(btn => {
   btn.classList.toggle('active', btn.dataset.lang === LANG);
   btn.addEventListener('click', () => setLang(btn.dataset.lang));
 });
-applyStaticTranslations();
-renderGroupLegend();
-renderDateRangeSubtitle();
-renderDayTabs();
-renderRooms();
-renderFlagsPanel();
-populateRunSheetGroupFilter();
-if (activeDay().date === TODAY) {
-  slider.value = Math.min(Math.max(nowMinutes(), DAY_START), DAY_END);
+async function boot() {
+  applyStaticTranslations();
+  // A page freshly loaded already in Spanish (LANG restored from a prior
+  // session via localStorage) still needs any not-yet-cached content
+  // translated before its first render -- same readiness gate setLang() uses.
+  if (LANG === 'es') {
+    setTranslatingIndicator(true);
+    await prepareLiveTranslations();
+    setTranslatingIndicator(false);
+  }
+  renderGroupLegend();
+  renderDateRangeSubtitle();
+  renderDayTabs();
+  renderRooms();
+  renderFlagsPanel();
+  populateRunSheetGroupFilter();
+  if (activeDay().date === TODAY) {
+    slider.value = Math.min(Math.max(nowMinutes(), DAY_START), DAY_END);
+  }
+  update();
 }
-update();
+boot();
 </script>
 
 <script src="password-gate.js"></script>
