@@ -1394,6 +1394,11 @@ async function translateBatch(strings) {
       const res = await fetch(`${TRANSLATE_ENDPOINT}?key=${TRANSLATE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // Explicit referrerPolicy so the HTTP-referrer-restricted key has
+        // something to match against -- some browsers (observed in Safari)
+        // otherwise send no Referer at all on a cross-origin fetch, which
+        // Google's key restriction then rejects as an empty/unmatched referrer.
+        referrerPolicy: 'origin',
         body: JSON.stringify({ q: protectedChunk.map(p => p.protected), target: 'es', format: 'text' })
       });
       if (!res.ok) throw new Error(`Translate API HTTP ${res.status}`);
