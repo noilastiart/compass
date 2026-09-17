@@ -577,6 +577,30 @@
     font-style: italic;
   }
 
+  /* --- Language toggle (UI chrome only, not BEO content) --- */
+  .lang-toggle {
+    display: inline-flex;
+    margin-left: 10px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    overflow: hidden;
+    vertical-align: middle;
+  }
+  .lang-toggle-btn {
+    background: var(--surface-raised);
+    color: var(--text-dim);
+    border: none;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    cursor: pointer;
+  }
+  .lang-toggle-btn.active {
+    background: var(--gold-bright);
+    color: #10141a;
+  }
+
   .tooltip {
     position: fixed;
     background: #0a0e13;
@@ -1006,11 +1030,15 @@
 <div class="subtitle" id="dateRangeSubtitle"></div>
 
 <div style="margin-bottom: 16px;" class="no-print-hide">
-  <button onclick="window.print()" style="background:var(--surface-raised); color:var(--gold-bright); border:1px solid var(--gold); padding:8px 18px; border-radius:20px; font-size:12px; cursor:pointer;">🖨 Print this view (one landscape page)</button>
-  <button id="printRunSheetBtn" style="background:var(--surface-raised); color:var(--gold-bright); border:1px solid var(--gold); padding:8px 18px; border-radius:20px; font-size:12px; cursor:pointer; margin-left:10px;">🖨 Print run sheet (day view)</button>
+  <button onclick="window.print()" style="background:var(--surface-raised); color:var(--gold-bright); border:1px solid var(--gold); padding:8px 18px; border-radius:20px; font-size:12px; cursor:pointer;">🖨 <span data-i18n="print_view">Print this view (one landscape page)</span></button>
+  <button id="printRunSheetBtn" style="background:var(--surface-raised); color:var(--gold-bright); border:1px solid var(--gold); padding:8px 18px; border-radius:20px; font-size:12px; cursor:pointer; margin-left:10px;">🖨 <span data-i18n="print_runsheet">Print run sheet (day view)</span></button>
   <select id="runSheetGroupFilter" style="margin-left:10px; background:var(--surface-raised); color:var(--text); border:1px solid var(--line); border-radius:14px; padding:7px 10px; font-size:12px;">
-    <option value="">All groups (default)</option>
+    <option value="" data-i18n="runsheet_all_groups">All groups (default)</option>
   </select>
+  <span class="lang-toggle" id="langToggle">
+    <button type="button" class="lang-toggle-btn active" data-lang="en">EN</button>
+    <button type="button" class="lang-toggle-btn" data-lang="es">ES</button>
+  </span>
 </div>
 
 <div class="day-tabs no-print-hide" id="dayTabs"></div>
@@ -1029,14 +1057,14 @@
 </div>
 
 <div class="layer-toggles">
-  <div class="layer-toggle active" data-layer="banquet"><span class="swatch" style="background:var(--banquet)"></span> Banquet setup</div>
-  <div class="layer-toggle active" data-layer="av"><span class="swatch" style="background:var(--av)"></span> AV setup</div>
-  <div class="layer-toggle active" data-layer="live"><span class="swatch" style="background:var(--live)"></span> Live event</div>
-  <div class="layer-toggle active" data-layer="flip"><span class="swatch" style="background:repeating-linear-gradient(45deg,#4a5a6c80,#4a5a6c80 4px,#5a6b7d80 4px,#5a6b7d80 8px)"></span> Flip / turnover</div>
-  <div class="layer-toggle active" data-layer="diagram"><span class="swatch swatch-icon">⛶</span> Diagrams</div>
-  <div class="layer-toggle active" data-layer="evening-setup"><span class="swatch swatch-icon" style="color:var(--amber)">◐</span> Evening Setup</div>
-  <div class="layer-toggle active" data-layer="notes"><span class="swatch swatch-icon">✉</span> Notes</div>
-  <div class="print-hint">Toggle layers to isolate what you need to share or print</div>
+  <div class="layer-toggle active" data-layer="banquet"><span class="swatch" style="background:var(--banquet)"></span> <span data-i18n="layer_banquet">Banquet setup</span></div>
+  <div class="layer-toggle active" data-layer="av"><span class="swatch" style="background:var(--av)"></span> <span data-i18n="layer_av">AV setup</span></div>
+  <div class="layer-toggle active" data-layer="live"><span class="swatch" style="background:var(--live)"></span> <span data-i18n="layer_live">Live event</span></div>
+  <div class="layer-toggle active" data-layer="flip"><span class="swatch" style="background:repeating-linear-gradient(45deg,#4a5a6c80,#4a5a6c80 4px,#5a6b7d80 4px,#5a6b7d80 8px)"></span> <span data-i18n="layer_flip">Flip / turnover</span></div>
+  <div class="layer-toggle active" data-layer="diagram"><span class="swatch swatch-icon">⛶</span> <span data-i18n="layer_diagrams">Diagrams</span></div>
+  <div class="layer-toggle active" data-layer="evening-setup"><span class="swatch swatch-icon" style="color:var(--amber)">◐</span> <span data-i18n="layer_evening">Evening Setup</span></div>
+  <div class="layer-toggle active" data-layer="notes"><span class="swatch swatch-icon">✉</span> <span data-i18n="layer_notes">Notes</span></div>
+  <div class="print-hint" data-i18n="print_hint">Toggle layers to isolate what you need to share or print</div>
 </div>
 
 <div class="timeline-container">
@@ -1047,25 +1075,25 @@
   <div id="roomRows"></div>
 
   <div class="legend">
-    <div class="legend-item"><span class="legend-swatch" style="background:var(--banquet)"></span> Banquet setup</div>
-    <div class="legend-item"><span class="legend-swatch" style="background:var(--av)"></span> AV setup</div>
-    <div class="legend-item"><span class="legend-swatch" style="background:var(--live)"></span> Live event</div>
-    <div class="legend-item"><span class="legend-swatch" style="background:repeating-linear-gradient(45deg,#4a5a6c80,#4a5a6c80 4px,#5a6b7d80 4px,#5a6b7d80 8px)"></span> Flip / turnover</div>
-    <div class="legend-item"><span class="legend-swatch" style="background:repeating-linear-gradient(45deg,#a6782870,#a6782870 4px,#d9a44180 4px,#d9a44180 8px)"></span> Flip too tight</div>
-    <div class="legend-item"><span class="legend-swatch past"></span> Already past (live clock)</div>
-    <div class="legend-item"><span class="legend-swatch rev" style="background:var(--red)"></span> REV — changed since original BEO</div>
+    <div class="legend-item"><span class="legend-swatch" style="background:var(--banquet)"></span> <span data-i18n="layer_banquet">Banquet setup</span></div>
+    <div class="legend-item"><span class="legend-swatch" style="background:var(--av)"></span> <span data-i18n="layer_av">AV setup</span></div>
+    <div class="legend-item"><span class="legend-swatch" style="background:var(--live)"></span> <span data-i18n="layer_live">Live event</span></div>
+    <div class="legend-item"><span class="legend-swatch" style="background:repeating-linear-gradient(45deg,#4a5a6c80,#4a5a6c80 4px,#5a6b7d80 4px,#5a6b7d80 8px)"></span> <span data-i18n="layer_flip">Flip / turnover</span></div>
+    <div class="legend-item"><span class="legend-swatch" style="background:repeating-linear-gradient(45deg,#a6782870,#a6782870 4px,#d9a44180 4px,#d9a44180 8px)"></span> <span data-i18n="legend_flip_tight">Flip too tight</span></div>
+    <div class="legend-item"><span class="legend-swatch past"></span> <span data-i18n="legend_past">Already past (live clock)</span></div>
+    <div class="legend-item"><span class="legend-swatch rev" style="background:var(--red)"></span> <span data-i18n="legend_rev">REV — changed since original BEO</span></div>
   </div>
-  <div class="warning-note">⚠ Amber hatch = flip window sales booked is shorter than what this setup realistically needs (kept distinct from the red/pink overlap and conflict markers below). Faded blocks have already happened, based on the current time.</div>
+  <div class="warning-note" data-i18n="warning_note">⚠ Amber hatch = flip window sales booked is shorter than what this setup realistically needs (kept distinct from the red/pink overlap and conflict markers below). Faded blocks have already happened, based on the current time.</div>
   <div class="unassigned-note no-print-hide" id="unassignedNote"></div>
 </div>
 
 <div class="run-sheet-modal" id="runSheetModal">
   <div class="run-sheet-modal-panel">
     <div class="run-sheet-modal-toolbar">
-      <div class="run-sheet-modal-title">Run Sheet Preview</div>
+      <div class="run-sheet-modal-title" data-i18n="runsheet_modal_title">Run Sheet Preview</div>
       <div class="run-sheet-modal-actions">
-        <button id="runSheetPrintBtn">🖨 Print</button>
-        <button class="run-sheet-close-btn" id="runSheetCloseBtn">✕ Close</button>
+        <button id="runSheetPrintBtn">🖨 <span data-i18n="runsheet_print_btn">Print</span></button>
+        <button class="run-sheet-close-btn" id="runSheetCloseBtn">✕ <span data-i18n="close_title">Close</span></button>
       </div>
     </div>
     <div class="run-sheet-modal-scroll">
@@ -1075,7 +1103,7 @@
 </div>
 
 <div class="flags-panel no-print-hide" id="flagsPanel" style="display:none;">
-  <h2 id="flagsHeader"><span class="flags-chevron" id="flagsChevron">▸</span>⚠ Flagged for Review (<span id="flagsCount">0</span>)</h2>
+  <h2 id="flagsHeader"><span class="flags-chevron" id="flagsChevron">▸</span>⚠ <span data-i18n="flags_header">Flagged for Review</span> (<span id="flagsCount">0</span>)</h2>
   <div id="flagsBody"></div>
 </div>
 
@@ -1087,9 +1115,9 @@
       <div class="diagram-panel-title" id="diagramPanelTitle"></div>
       <div class="diagram-panel-sub" id="diagramPanelSub"></div>
     </div>
-    <button class="diagram-panel-close" id="diagramPanelClose" title="Close">✕</button>
+    <button class="diagram-panel-close" id="diagramPanelClose" title="Close" data-i18n-title="close_title">✕</button>
   </div>
-  <div class="diagram-panel-hint">Floor-plan diagram from the source BEO. Panel stays open — click ✕ to close.</div>
+  <div class="diagram-panel-hint" data-i18n="diagram_hint">Floor-plan diagram from the source BEO. Panel stays open — click ✕ to close.</div>
   <div class="diagram-panel-body">
     <img id="diagramPanelImg" src="" alt="Room diagram">
   </div>
@@ -1101,14 +1129,14 @@
       <div class="notes-panel-title" id="notesPanelTitle"></div>
       <div class="notes-panel-sub" id="notesPanelSub"></div>
     </div>
-    <button class="notes-panel-close" id="notesPanelClose" title="Close">✕</button>
+    <button class="notes-panel-close" id="notesPanelClose" title="Close" data-i18n-title="close_title">✕</button>
   </div>
-  <div class="notes-panel-hint">Personal scratchpad note — saved only in this browser, not shared, no history kept. Freely editable or clearable any time.</div>
+  <div class="notes-panel-hint" data-i18n="notes_hint">Personal scratchpad note — saved only in this browser, not shared, no history kept. Freely editable or clearable any time.</div>
   <div class="notes-panel-body">
-    <textarea id="notesPanelTextarea" placeholder="Type a note…"></textarea>
+    <textarea id="notesPanelTextarea" placeholder="Type a note…" data-i18n-placeholder="notes_placeholder"></textarea>
     <div class="notes-panel-actions">
-      <button id="notesPanelSave">Save</button>
-      <button id="notesPanelClear">Clear</button>
+      <button id="notesPanelSave" data-i18n="notes_save">Save</button>
+      <button id="notesPanelClear" data-i18n="notes_clear">Clear</button>
       <span class="notes-panel-saved-indicator" id="notesPanelSavedIndicator"></span>
     </div>
   </div>
@@ -1119,6 +1147,162 @@ const DATA = {"days":[{"date":"2026-09-08","dateLabel":"Tue, Sep 8","rooms":[{"n
 
 const DAY_START = 300;  // 5:00 AM
 const DAY_END = 1440;   // Midnight
+
+// --- UI-chrome translation (English/Spanish) ---
+// Covers only the app's own fixed interface text (buttons, toggles, headers,
+// legend, tooltips/hints). Live event content pulled from BEOs -- group
+// names, event labels, setup/AV notes, flags, conflict details -- is never
+// touched here; those stay exactly as processed from the source packet.
+const I18N = {
+  en: {
+    print_view: "Print this view (one landscape page)",
+    print_runsheet: "Print run sheet (day view)",
+    runsheet_all_groups: "All groups (default)",
+    layer_banquet: "Banquet setup",
+    layer_av: "AV setup",
+    layer_live: "Live event",
+    layer_flip: "Flip / turnover",
+    layer_diagrams: "Diagrams",
+    layer_evening: "Evening Setup",
+    layer_notes: "Notes",
+    print_hint: "Toggle layers to isolate what you need to share or print",
+    legend_flip_tight: "Flip too tight",
+    legend_past: "Already past (live clock)",
+    legend_rev: "REV — changed since original BEO",
+    warning_note: "⚠ Amber hatch = flip window sales booked is shorter than what this setup realistically needs (kept distinct from the red/pink overlap and conflict markers below). Faded blocks have already happened, based on the current time.",
+    runsheet_modal_title: "Run Sheet Preview",
+    runsheet_print_btn: "Print",
+    close_title: "Close",
+    flags_header: "Flagged for Review",
+    flags_general: "General / multi-day",
+    diagram_hint: "Floor-plan diagram from the source BEO. Panel stays open — click ✕ to close.",
+    diagram_view_title: "View floor-plan diagram",
+    notes_hint: "Personal scratchpad note — saved only in this browser, not shared, no history kept. Freely editable or clearable any time.",
+    notes_placeholder: "Type a note…",
+    notes_save: "Save",
+    notes_clear: "Clear",
+    note_badge_add: "Add a note",
+    note_badge_view: "Personal note",
+    phase_live_caps: "LIVE",
+    phase_turnover_tight: "Turnover — TIGHT",
+    phase_idle: "Open / idle",
+    flip_tooltip_tight: "⚠ Flip too tight",
+    flip_note_template: "{gap} min between \"{from}\" and \"{to}\" — this room's flip threshold is {threshold} min (scales with combined-space scope). Visibility flag only — never blocks or overrides what's booked.",
+    diagram_mismatch_watch: "Diagram prints BEO #{beo}, not this event's BEO# -- watch this, likely resolves on next weekly parse ({days}d out).",
+    diagram_mismatch_urgent: "Diagram prints BEO #{beo}, not this event's BEO# -- URGENT, needs a human look now ({days}d out).",
+    revised_tag: "REVISED",
+    conflict_prefix: "SCHEDULING CONFLICT: ",
+    scheduling_conflict_title: "Scheduling conflict",
+    conflicts_none_header: "✓ No scheduling conflicts",
+    conflicts_none_body: "No overlapping room bookings or tight turnovers between groups on {date}.",
+    conflicts_count_singular: "{n} scheduling conflict — {date}",
+    conflicts_count_plural: "{n} scheduling conflicts — {date}",
+    badge_tight: "TIGHT TURNOVER",
+    badge_sameday: "SAME DAY",
+    badge_double: "DOUBLE-BOOKED",
+    badge_overlap: "OVERLAP",
+    snapshot_empty: "No rooms booked this day.",
+    runsheet_set_chip: "Set {n}",
+    runsheet_setup_label: "Setup:",
+    runsheet_av_label: "AV:",
+    runsheet_no_av: "No AV",
+    runsheet_heading: "Run Sheet",
+    note_saved: "Saved.",
+    note_cleared: "Cleared.",
+    evening_setup_title: "Likely evening setup"
+  },
+  es: {
+    print_view: "Imprimir esta vista (una página horizontal)",
+    print_runsheet: "Imprimir hoja de ruta (vista diaria)",
+    runsheet_all_groups: "Todos los grupos (predeterminado)",
+    layer_banquet: "Montaje de banquete",
+    layer_av: "Montaje de AV",
+    layer_live: "Evento en vivo",
+    layer_flip: "Cambio / transición",
+    layer_diagrams: "Diagramas",
+    layer_evening: "Montaje nocturno",
+    layer_notes: "Notas",
+    print_hint: "Active o desactive capas para aislar lo que necesite compartir o imprimir",
+    legend_flip_tight: "Transición muy ajustada",
+    legend_past: "Ya pasado (reloj en vivo)",
+    legend_rev: "REV — cambiado desde el BEO original",
+    warning_note: "⚠ El rayado ámbar indica que la ventana de transición reservada por ventas es más corta de lo que este montaje realmente necesita (se mantiene distinto de los marcadores rojo/rosa de superposición y conflicto de abajo). Los bloques atenuados ya ocurrieron, según la hora actual.",
+    runsheet_modal_title: "Vista previa de la hoja de ruta",
+    runsheet_print_btn: "Imprimir",
+    close_title: "Cerrar",
+    flags_header: "Marcado para revisión",
+    flags_general: "General / varios días",
+    diagram_hint: "Diagrama del plano del BEO original. El panel permanece abierto — haga clic en ✕ para cerrar.",
+    diagram_view_title: "Ver diagrama del plano",
+    notes_hint: "Nota personal — guardada solo en este navegador, no se comparte, sin historial. Editable o eliminable en cualquier momento.",
+    notes_placeholder: "Escriba una nota…",
+    notes_save: "Guardar",
+    notes_clear: "Borrar",
+    note_badge_add: "Agregar una nota",
+    note_badge_view: "Nota personal",
+    phase_live_caps: "EN VIVO",
+    phase_turnover_tight: "Transición — AJUSTADA",
+    phase_idle: "Libre / sin uso",
+    flip_tooltip_tight: "⚠ Transición muy ajustada",
+    flip_note_template: "{gap} min entre \"{from}\" y \"{to}\" — el umbral de transición de esta sala es de {threshold} min (varía según el alcance del espacio combinado). Solo es un aviso visual — nunca anula ni bloquea lo reservado.",
+    diagram_mismatch_watch: "El diagrama muestra el BEO #{beo}, no el BEO de este evento -- a vigilar, probablemente se resuelva en el próximo procesamiento semanal (a {days} días).",
+    diagram_mismatch_urgent: "El diagrama muestra el BEO #{beo}, no el BEO de este evento -- URGENTE, requiere revisión humana ahora (a {days} días).",
+    revised_tag: "REVISADO",
+    conflict_prefix: "CONFLICTO DE PROGRAMACIÓN: ",
+    scheduling_conflict_title: "Conflicto de programación",
+    conflicts_none_header: "✓ Sin conflictos de programación",
+    conflicts_none_body: "No hay reservas de salas superpuestas ni transiciones ajustadas entre grupos el {date}.",
+    conflicts_count_singular: "{n} conflicto de programación — {date}",
+    conflicts_count_plural: "{n} conflictos de programación — {date}",
+    badge_tight: "TRANSICIÓN AJUSTADA",
+    badge_sameday: "MISMO DÍA",
+    badge_double: "DOBLE RESERVA",
+    badge_overlap: "SUPERPOSICIÓN",
+    snapshot_empty: "No hay salas reservadas este día.",
+    runsheet_set_chip: "Armado: {n}",
+    runsheet_setup_label: "Montaje:",
+    runsheet_av_label: "AV:",
+    runsheet_no_av: "Sin AV",
+    runsheet_heading: "Hoja de Ruta",
+    note_saved: "Guardado.",
+    note_cleared: "Borrado.",
+    evening_setup_title: "Probable montaje nocturno"
+  }
+};
+let LANG = 'en';
+try { LANG = localStorage.getItem('compassLang') || 'en'; } catch (e) {}
+function t(key, vars) {
+  const str = (I18N[LANG] && I18N[LANG][key]) || I18N.en[key] || key;
+  return vars ? str.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? vars[k] : '')) : str;
+}
+// The one standing-rule sentinel value ("No AV") that's stored as literal
+// data text but is really the app's own fixed placeholder for "field is
+// empty" -- translated on display, unlike genuine BEO-sourced notes.
+function translateDataText(s) {
+  return s === 'No AV' ? t('runsheet_no_av') : s;
+}
+function applyStaticTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.getAttribute('data-i18n-title')); });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-placeholder')); });
+  document.documentElement.lang = LANG;
+}
+function setLang(lang) {
+  LANG = lang;
+  try { localStorage.setItem('compassLang', lang); } catch (e) {}
+  document.querySelectorAll('.lang-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+  applyStaticTranslations();
+  renderGroupLegend();
+  renderDateRangeSubtitle();
+  renderDayTabs();
+  renderRooms();
+  renderFlagsPanel();
+  populateRunSheetGroupFilter();
+  update();
+  if (document.getElementById('runSheetModal').classList.contains('open')) {
+    renderRunSheet(document.getElementById('runSheetGroupFilter').value);
+  }
+}
 
 function fmtTime(mins) {
   mins = ((mins % 1440) + 1440) % 1440;
@@ -1242,14 +1426,14 @@ document.getElementById('notesPanelClose').addEventListener('click', closeNotesP
 document.getElementById('notesPanelSave').addEventListener('click', () => {
   if (!openNoteKey) return;
   setNote(openNoteKey, notesPanelTextarea.value.trim());
-  notesPanelSavedIndicator.textContent = 'Saved.';
+  notesPanelSavedIndicator.textContent = t('note_saved');
   renderRooms();
 });
 document.getElementById('notesPanelClear').addEventListener('click', () => {
   if (!openNoteKey) return;
   notesPanelTextarea.value = '';
   setNote(openNoteKey, '');
-  notesPanelSavedIndicator.textContent = 'Cleared.';
+  notesPanelSavedIndicator.textContent = t('note_cleared');
   renderRooms();
 });
 
@@ -1291,10 +1475,10 @@ function renderDateRangeSubtitle() {
 }
 
 function badgeFor(kind) {
-  if (kind === 'tight-flip') return ['tight', 'TIGHT TURNOVER'];
-  if (kind === 'same-day-shared') return ['same-day', 'SAME DAY'];
-  if (kind === 'double-booking') return ['double-booking', 'DOUBLE-BOOKED'];
-  return ['', 'OVERLAP'];
+  if (kind === 'tight-flip') return ['tight', t('badge_tight')];
+  if (kind === 'same-day-shared') return ['same-day', t('badge_sameday')];
+  if (kind === 'double-booking') return ['double-booking', t('badge_double')];
+  return ['', t('badge_overlap')];
 }
 
 function renderConflictsPanel() {
@@ -1302,11 +1486,12 @@ function renderConflictsPanel() {
   const conflicts = conflictsForDate(day.date);
   if (!conflicts.length) {
     conflictsPanelEl.className = 'conflicts-panel is-clear';
-    conflictsPanelEl.innerHTML = `<h2>✓ No scheduling conflicts</h2>No overlapping room bookings or tight turnovers between groups on ${day.dateLabel}.`;
+    conflictsPanelEl.innerHTML = `<h2>${t('conflicts_none_header')}</h2>${t('conflicts_none_body', { date: day.dateLabel })}`;
     return;
   }
   conflictsPanelEl.className = 'conflicts-panel';
-  conflictsPanelEl.innerHTML = `<h2>⚠ ${conflicts.length} scheduling conflict${conflicts.length > 1 ? 's' : ''} — ${day.dateLabel}</h2>` +
+  const headerText = t(conflicts.length > 1 ? 'conflicts_count_plural' : 'conflicts_count_singular', { n: conflicts.length, date: day.dateLabel });
+  conflictsPanelEl.innerHTML = `<h2>⚠ ${headerText}</h2>` +
     `<ul>${conflicts.map(c => { const [cls, txt] = badgeFor(c.kind); return `<li><span class="kind-badge ${cls}">${txt}</span>${c.detail}</li>`; }).join('')}</ul>`;
 }
 
@@ -1357,7 +1542,7 @@ function renderFlagsPanel() {
       return `<div class="flags-group"><div class="flags-group-title">${group}</div>` +
         `<ul>${items.map(f => `<li>${f}</li>`).join('')}</ul></div>`;
     }).join('');
-    sections.push(`<div class="flags-day"><div class="flags-day-title">General / multi-day</div>${groups}</div>`);
+    sections.push(`<div class="flags-day"><div class="flags-day-title">${t('flags_general')}</div>${groups}</div>`);
   }
 
   const flagsPanel = document.getElementById('flagsPanel');
@@ -1388,7 +1573,7 @@ function renderDayTabs() {
     const isToday = day.date === TODAY;
     const hasConflict = conflictsForDate(day.date).length > 0;
     tab.className = 'day-tab' + (i === activeDayIndex ? ' active' : '') + (isToday ? ' is-today' : '');
-    tab.innerHTML = (isToday ? '<span class="today-dot"></span>' : '') + day.dateLabel + (hasConflict ? '<span class="conflict-dot" title="Scheduling conflict"></span>' : '');
+    tab.innerHTML = (isToday ? '<span class="today-dot"></span>' : '') + day.dateLabel + (hasConflict ? `<span class="conflict-dot" title="${t('scheduling_conflict_title')}"></span>` : '');
     tab.addEventListener('click', () => { activeDayIndex = i; renderDayTabs(); renderRooms(); populateRunSheetGroupFilter(); update(); });
     dayTabsEl.appendChild(tab);
   });
@@ -1397,12 +1582,12 @@ function renderDayTabs() {
 function activeDay() { return DATA.days[activeDayIndex]; }
 
 function tooltipHtml(titleText, timeRange, statusRev, flags, notes, groupName, conflictNote) {
-  let html = `<div class="t-title">${statusRev ? '<span class="t-rev">[REVISED]</span> ' : ''}${titleText}</div>`;
+  let html = `<div class="t-title">${statusRev ? `<span class="t-rev">[${t('revised_tag')}]</span> ` : ''}${titleText}</div>`;
   if (groupName) html += `<div style="color:var(--text-dim); font-size:11px;">${groupName}</div>`;
   html += timeRange;
   if (notes) html += `<div class="t-notes">${notes}</div>`;
   if (flags && flags.length) html += `<div class="t-flag">⚠ ${flags.join(' · ')}</div>`;
-  if (conflictNote) html += `<div class="t-flag" style="color:#ff9caa;">⚡ SCHEDULING CONFLICT: ${conflictNote}</div>`;
+  if (conflictNote) html += `<div class="t-flag" style="color:#ff9caa;">⚡ ${t('conflict_prefix')}${conflictNote}</div>`;
   return html;
 }
 
@@ -1417,8 +1602,8 @@ function diagramMismatchInfo(diagramEntry, eventDateISO) {
   const severity = daysUntil > 7 ? 'yellow' : 'red';
   const printedBeo = diagramEntry.printedBeo || '?';
   const text = severity === 'yellow'
-    ? `Diagram prints BEO #${printedBeo}, not this event's BEO# -- watch this, likely resolves on next weekly parse (${daysUntil}d out).`
-    : `Diagram prints BEO #${printedBeo}, not this event's BEO# -- URGENT, needs a human look now (${daysUntil}d out).`;
+    ? t('diagram_mismatch_watch', { beo: printedBeo, days: daysUntil })
+    : t('diagram_mismatch_urgent', { beo: printedBeo, days: daysUntil });
   return { severity, text };
 }
 
@@ -1490,7 +1675,7 @@ function addBlock(track, className, start, end, opts) {
     badge.textContent = '⛶';
     badge.style.left = `calc(${pct(end)}% - 9px)`;
     badge.style.top = ((opts.top != null ? opts.top : 3) - 8) + 'px';
-    badge.title = 'View floor-plan diagram';
+    badge.title = t('diagram_view_title');
     const mismatch = diagramMismatchInfo(DATA.diagrams[opts.diagramKey], opts.eventDate);
     if (mismatch) {
       badge.classList.add('diagram-badge-mismatch-' + mismatch.severity);
@@ -1507,7 +1692,7 @@ function addBlock(track, className, start, end, opts) {
     moon.style.top = ((opts.top != null ? opts.top : 3) - 8) + 'px';
     const showMoonTip = () => {
       tooltip.style.display = 'block';
-      tooltip.innerHTML = `<div class="t-title">Likely evening setup</div><div class="t-notes">${opts.eveningSetupNote || ''}</div>`;
+      tooltip.innerHTML = `<div class="t-title">${t('evening_setup_title')}</div><div class="t-notes">${opts.eveningSetupNote || ''}</div>`;
     };
     moon.addEventListener('mouseenter', showMoonTip);
     moon.addEventListener('mousemove', (e) => {
@@ -1530,7 +1715,7 @@ function addBlock(track, className, start, end, opts) {
     noteBadge.textContent = '✉';
     noteBadge.style.left = `calc(${pct(start)}% - 8px)`;
     noteBadge.style.top = ((opts.top != null ? opts.top : 3) + (opts.height != null ? opts.height : 13) + 2) + 'px';
-    noteBadge.title = hasNote ? 'Personal note' : 'Add a note';
+    noteBadge.title = hasNote ? t('note_badge_view') : t('note_badge_add');
     const openThisNote = (e) => {
       e.stopPropagation();
       toggleNotesPanel(opts.noteKey, opts.tooltipTitle, opts.groupName);
@@ -1779,14 +1964,14 @@ function renderRooms() {
 
         if (kind === 'banquet') {
           addBlock(track, 'block-banquet', item.start, item.end, {
-            layer: 'banquet', tooltipTitle: `Banquet setup — ${ev.label}`, rev, flags: ev.flags, notes: ev.setupNotes,
+            layer: 'banquet', tooltipTitle: `${t('layer_banquet')} — ${ev.label}`, rev, flags: ev.flags, notes: ev.setupNotes,
             groupName: ev.group, conflict: hasConflict, conflictNote: ev.conflictNote, top, height,
             diagramKey: ev.diagramKey, eventDate: day.date, eventCategory: ev.eventCategory,
             eveningSetup: ev.eveningSetup, eveningSetupNote: ev.eveningSetupNote, noteKey
           });
         } else if (kind === 'av') {
           addBlock(track, 'block-av', item.start, item.end, {
-            layer: 'av', tooltipTitle: `AV setup — ${ev.label}`, rev, flags: ev.flags, notes: ev.avNotes,
+            layer: 'av', tooltipTitle: `${t('layer_av')} — ${ev.label}`, rev, flags: ev.flags, notes: translateDataText(ev.avNotes),
             groupName: ev.group, top, height,
             eventCategory: ev.eventCategory
           });
@@ -1830,12 +2015,10 @@ function renderRooms() {
     computeFlipGaps(room).forEach(gap => {
       const flipClass = gap.tight ? 'block-flip-warning' : 'block-flip';
       addBlock(track, flipClass, gap.start, gap.end, {
-        layer: 'flip', showLabel: true, labelText: gap.tight ? 'Flip too tight' : 'Flip / turnover',
-        tooltipTitle: gap.tight ? '⚠ Flip too tight' : 'Flip / turnover',
+        layer: 'flip', showLabel: true, labelText: gap.tight ? t('legend_flip_tight') : t('layer_flip'),
+        tooltipTitle: gap.tight ? t('flip_tooltip_tight') : t('layer_flip'),
         groupName: gap.toEv.group,
-        notes: `${gap.gapMin} min between "${gap.fromEv.label}" and "${gap.toEv.label}" — this room's flip ` +
-          `threshold is ${gap.threshold} min (scales with combined-space scope). Visibility flag only — ` +
-          `never blocks or overrides what's booked.`,
+        notes: t('flip_note_template', { gap: gap.gapMin, from: gap.fromEv.label, to: gap.toEv.label, threshold: gap.threshold }),
         top: 3, height: trackHeight - 6
       });
     });
@@ -1860,21 +2043,21 @@ function renderRooms() {
 function currentStateForRoom(room, mins) {
   for (const ev of room.events) {
     if (ev.banquetStart != null && mins >= ev.banquetStart && mins < ev.banquetEnd) {
-      return { phase: 'Banquet setup', color: 'var(--banquet-bright)', label: ev.label };
+      return { phase: t('layer_banquet'), color: 'var(--banquet-bright)', label: ev.label };
     }
     if (ev.avStart != null && mins >= ev.avStart && mins < ev.avEnd) {
-      return { phase: 'AV setup', color: 'var(--av-bright)', label: ev.label };
+      return { phase: t('layer_av'), color: 'var(--av-bright)', label: ev.label };
     }
     if (ev.liveStart != null && mins >= ev.liveStart && mins < ev.liveEnd) {
-      return { phase: 'LIVE', color: 'var(--live-bright)', label: ev.label };
+      return { phase: t('phase_live_caps'), color: 'var(--live-bright)', label: ev.label };
     }
   }
   for (const gap of computeFlipGaps(room)) {
     if (mins >= gap.start && mins < gap.end) {
-      return { phase: gap.tight ? 'Turnover — TIGHT' : 'Flip / turnover', color: gap.tight ? 'var(--red)' : '#5a6b7d', label: '' };
+      return { phase: gap.tight ? t('phase_turnover_tight') : t('layer_flip'), color: gap.tight ? 'var(--red)' : '#5a6b7d', label: '' };
     }
   }
-  return { phase: 'Open / idle', color: '#3a4a5c', label: '' };
+  return { phase: t('phase_idle'), color: '#3a4a5c', label: '' };
 }
 
 function renderNowLines(mins) {
@@ -1893,7 +2076,7 @@ function renderSnapshot(mins) {
   const day = activeDay();
   snapshotEl.innerHTML = `<div class="time-readout">${fmtTime(mins)}</div>`;
   if (!day.rooms.length) {
-    snapshotEl.innerHTML += `<div class="snapshot-empty">No rooms booked this day.</div>`;
+    snapshotEl.innerHTML += `<div class="snapshot-empty">${t('snapshot_empty')}</div>`;
     return;
   }
   day.rooms.forEach(room => {
@@ -2009,7 +2192,7 @@ function populateRunSheetGroupFilter() {
   const prev = sel.value;
   const day = activeDay();
   const groupsToday = [...new Set(day.rooms.flatMap(r => r.events.map(ev => ev.group)).filter(Boolean))];
-  sel.innerHTML = '<option value="">All groups (default)</option>' +
+  sel.innerHTML = `<option value="">${t('runsheet_all_groups')}</option>` +
     groupsToday.map(g => `<option value="${g}">${g}</option>`).join('');
   if (groupsToday.includes(prev)) sel.value = prev;
 }
@@ -2030,16 +2213,16 @@ function renderRunSheet(groupFilter) {
   const roomsHtml = rooms.map(room => {
     const events = room.events.slice().sort((a, b) => runSheetSortKey(a) - runSheetSortKey(b));
     const eventsHtml = events.map(ev => {
-      const revTag = ev.status === 'revision' ? '<span class="run-sheet-rev-tag">REVISED</span>' : '';
+      const revTag = ev.status === 'revision' ? `<span class="run-sheet-rev-tag">${t('revised_tag')}</span>` : '';
       // Set count lives on the Live block on the main timeline, so it's gated
       // the same way here -- hidden whenever Live is toggled off.
-      const setChip = (activeLayers.has('live') && ev.set) ? `<span class="run-sheet-set-chip">Set ${ev.set}</span>` : '';
+      const setChip = (activeLayers.has('live') && ev.set) ? `<span class="run-sheet-set-chip">${t('runsheet_set_chip', { n: ev.set })}</span>` : '';
       const setupHtml = (activeLayers.has('banquet') && ev.setupNotes)
-        ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">Setup:</span>${ev.setupNotes}</div>` : '';
+        ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">${t('runsheet_setup_label')}</span>${ev.setupNotes}</div>` : '';
       const avHtml = activeLayers.has('av')
         ? (ev.avNotes
-            ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">AV:</span>${ev.avNotes}</div>`
-            : `<div class="run-sheet-notes run-sheet-av-none"><span class="run-sheet-notes-label">AV:</span>No AV</div>`)
+            ? `<div class="run-sheet-notes"><span class="run-sheet-notes-label">${t('runsheet_av_label')}</span>${translateDataText(ev.avNotes)}</div>`
+            : `<div class="run-sheet-notes run-sheet-av-none"><span class="run-sheet-notes-label">${t('runsheet_av_label')}</span>${t('runsheet_no_av')}</div>`)
         : '';
       return `<div class="run-sheet-event ${runSheetSetupClass(ev)}">
         <div class="run-sheet-event-head">
@@ -2053,7 +2236,7 @@ function renderRunSheet(groupFilter) {
   }).join('');
 
   document.getElementById('runSheetContainer').innerHTML =
-    `<h2>Run Sheet — ${day.dateLabel}${groupFilter ? ' — ' + groupFilter : ''}</h2><div class="run-sheet-body">${roomsHtml}</div>`;
+    `<h2>${t('runsheet_heading')} — ${day.dateLabel}${groupFilter ? ' — ' + groupFilter : ''}</h2><div class="run-sheet-body">${roomsHtml}</div>`;
 }
 
 function openRunSheetPreview() {
@@ -2098,6 +2281,11 @@ setInterval(() => {
   }
 }, 30000);
 
+document.querySelectorAll('.lang-toggle-btn').forEach(btn => {
+  btn.classList.toggle('active', btn.dataset.lang === LANG);
+  btn.addEventListener('click', () => setLang(btn.dataset.lang));
+});
+applyStaticTranslations();
 renderGroupLegend();
 renderDateRangeSubtitle();
 renderDayTabs();
