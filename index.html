@@ -939,7 +939,9 @@
   }
   .run-sheet-modal-actions .run-sheet-close-btn { color: var(--text); border-color: var(--line); }
   .run-sheet-modal-scroll { overflow: auto; padding: 20px 24px; }
-  .run-sheet-container h2 { font-size: 15px; margin: 0 0 8px; color: #141a21; }
+  .run-sheet-container h2 { font-size: 15px; margin: 0 0 4px; color: #141a21; }
+  .run-sheet-layers { font-size: 11px; color: #555; margin: 0 0 10px; }
+  .run-sheet-layers strong { color: #141a21; }
   .run-sheet-body { column-count: 2; column-gap: 22px; }
   .run-sheet-room { break-inside: avoid; margin-bottom: 8px; }
   .run-sheet-room-name { font-weight: 700; font-size: 11px; color: #141a21; border-bottom: 1px solid #a8b8c5; margin-bottom: 3px; padding-bottom: 2px; }
@@ -1221,6 +1223,7 @@ const I18N = {
     runsheet_av_label: "AV:",
     runsheet_no_av: "No AV",
     runsheet_heading: "Run Sheet",
+    runsheet_showing: "Showing:",
     note_saved: "Saved.",
     note_cleared: "Cleared.",
     evening_setup_title: "Likely evening setup",
@@ -1281,6 +1284,7 @@ const I18N = {
     runsheet_av_label: "AV:",
     runsheet_no_av: "Sin AV",
     runsheet_heading: "Hoja de Ruta",
+    runsheet_showing: "Mostrando:",
     note_saved: "Guardado.",
     note_cleared: "Borrado.",
     evening_setup_title: "Probable montaje nocturno",
@@ -2448,6 +2452,15 @@ function populateRunSheetGroupFilter() {
   if (groupsToday.includes(prev)) sel.value = prev;
 }
 
+// Names of the layer toggles currently on that actually drive run sheet content
+// (same names as the toggle bar), so a printed sheet says what it includes.
+function runSheetLayerNames() {
+  const names = [['banquet', 'layer_banquet'], ['av', 'layer_av'], ['live', 'layer_live']]
+    .filter(([layer]) => activeLayers.has(layer))
+    .map(([, key]) => t(key));
+  return names.length ? names.join(' · ') : '—';
+}
+
 function renderRunSheet(groupFilter) {
   const day = activeDay();
   // An event is included only if it still has at least one band in a
@@ -2490,7 +2503,9 @@ function renderRunSheet(groupFilter) {
   }).join('');
 
   document.getElementById('runSheetContainer').innerHTML =
-    `<h2>${t('runsheet_heading')} — ${dayLabel(day)}${groupFilter ? ' — ' + groupFilter : ''}</h2><div class="run-sheet-body">${roomsHtml}</div>`;
+    `<h2>${t('runsheet_heading')} — ${dayLabel(day)}${groupFilter ? ' — ' + groupFilter : ''}</h2>` +
+    `<div class="run-sheet-layers"><strong>${t('runsheet_showing')}</strong> ${runSheetLayerNames()}</div>` +
+    `<div class="run-sheet-body">${roomsHtml}</div>`;
 }
 
 function openRunSheetPreview() {
